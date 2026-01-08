@@ -663,20 +663,16 @@ class AnygoodApp {
         // Immediate visual update
         this.renderDetail();
 
-        // If item was just completed, move to bottom after delay
-        if (!wasCompleted && item.completed) {
-            setTimeout(() => {
-                // Remove item from current position
-                const movedItem = this.items[this.currentCategory].splice(index, 1)[0];
-                // Add to end of list
-                this.items[this.currentCategory].push(movedItem);
+        // Move to appropriate section after 2 second delay
+        setTimeout(() => {
+            // Remove item from current position
+            const movedItem = this.items[this.currentCategory].splice(index, 1)[0];
+            // Add to end of list
+            this.items[this.currentCategory].push(movedItem);
 
-                this.saveToStorage('items', this.items);
-                this.renderDetail();
-            }, 500);
-        } else {
             this.saveToStorage('items', this.items);
-        }
+            this.renderDetail();
+        }, 2000);
     }
 
     deleteItem(index) {
