@@ -14,7 +14,21 @@
                 <h1>anygood</h1>
             </header>
 
-            <div class="category-grid">
+            <!-- Natural Language Input -->
+            <div class="quick-add-container">
+                <input type="text" 
+                       id="quick-add-input" 
+                       placeholder="Type anything... e.g., 'Read The Creative Act by Rick Rubin' or 'Watch Past Lives'"
+                       autocomplete="off"
+                       aria-label="Quick add item using natural language">
+                <button class="quick-add-btn" onclick="app.quickAddFromMain()" title="Add item" aria-label="Add item">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="category-grid" id="category-grid">
                 <div class="category-card" data-category="read" onclick="app.openCategory('read')" role="button" tabindex="0" aria-label="Read category">
                     <div class="category-icon" aria-hidden="true">📚</div>
                     <h2>Read</h2>
@@ -44,6 +58,16 @@
                     <h2>Do</h2>
                     <div class="category-count" id="do-count" aria-label="0 uncompleted items">0</div>
                 </div>
+            </div>
+
+            <!-- Add Custom Category Button -->
+            <div class="add-category-container">
+                <button class="add-category-btn" onclick="app.showAddCategoryModal()" aria-label="Add custom category">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                    <span>Add Category</span>
+                </button>
             </div>
         </div>
 

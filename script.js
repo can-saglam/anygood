@@ -11,8 +11,16 @@ class AnygoodApp {
         this.aiFeatures = new AIFeatures();
         this.undoRedo = new UndoRedoManager();
 
-        // Core data
-        this.categories = ['read', 'listen', 'watch', 'eat', 'do'];
+        // Core data - load categories from storage or use defaults
+        const savedCategories = this.storage.load('categories');
+        this.categories = savedCategories || ['read', 'listen', 'watch', 'eat', 'do'];
+        this.categoryMetadata = this.storage.load('categoryMetadata') || {
+            read: { icon: '📚', name: 'Read' },
+            listen: { icon: '🎵', name: 'Listen' },
+            watch: { icon: '📺', name: 'Watch' },
+            eat: { icon: '🍽️', name: 'Eat' },
+            do: { icon: '✨', name: 'Do' }
+        };
         this.items = this.storage.load('items') || {};
         this.collections = this.storage.load('collections') || {};
         this.currentCategory = null;
@@ -22,11 +30,15 @@ class AnygoodApp {
         this.pendingToggle = null;
         this.isLoading = false;
         this.searchDebounceTimer = null;
+        this.completedItemsExpanded = {}; // Track which categories have completed items expanded
 
         // Initialize categories
         this.categories.forEach(cat => {
             if (!this.items[cat]) this.items[cat] = [];
             if (!this.collections[cat]) this.collections[cat] = [];
+            if (this.completedItemsExpanded[cat] === undefined) {
+                this.completedItemsExpanded[cat] = false; // Collapsed by default
+            }
         });
 
         // Suggested sources
@@ -309,9 +321,22 @@ class AnygoodApp {
         this.setupKeyboardShortcuts();
         this.setupDarkMode();
         this.setupSearch();
+        this.setupQuickAdd();
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
+    }
+
+    setupQuickAdd() {
+        const input = document.getElementById('quick-add-input');
+        if (input) {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.quickAddFromMain();
+                }
+            });
+        }
     }
 
     setupModalClose() {
@@ -487,10 +512,45 @@ class AnygoodApp {
 
     // Rendering
     renderOverview() {
-        this.categories.forEach(category => {
-            const count = this.items[category].filter(item => !item.completed).length;
+        const grid = document.getElementById('category-grid');
+        if (!grid) return;
+
+        // Clear existing custom categories (keep default structure)
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const customCategories = this.categories.filter(cat => !defaultCategories.includes(cat));
+
+        // Render default categories
+        defaultCategories.forEach(category => {
+            const count = (this.items[category] || []).filter(item => !item.completed).length;
             const countEl = document.getElementById(`${category}-count`);
             if (countEl) countEl.textContent = count;
+        });
+
+        // Render custom categories
+        const existingCustom = grid.querySelectorAll('.category-card.custom');
+        existingCustom.forEach(el => el.remove());
+
+        customCategories.forEach(category => {
+            const metadata = this.categoryMetadata[category] || { icon: '📋', name: category };
+            const count = (this.items[category] || []).filter(item => !item.completed).length;
+            
+            const card = document.createElement('div');
+            card.className = 'category-card custom';
+            card.setAttribute('data-category', category);
+            card.setAttribute('role', 'button');
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('aria-label', `${metadata.name} category`);
+            card.onclick = () => this.openCategory(category);
+            
+            card.innerHTML = `
+                <div class="category-icon" aria-hidden="true">${metadata.icon}</div>
+                <h2>${this.escapeHtml(metadata.name)}</h2>
+                <div class="category-count" id="${category}-count" aria-label="${count} uncompleted items">${count}</div>
+                <button class="category-delete-btn" onclick="event.stopPropagation(); app.deleteCategory('${category}')" 
+                        title="Delete category" aria-label="Delete category">×</button>
+            `;
+            
+            grid.appendChild(card);
         });
     }
 
@@ -501,16 +561,9 @@ class AnygoodApp {
     renderDetail() {
         if (!this.currentCategory) return;
 
-        const categoryNames = {
-            read: '📚 Read',
-            listen: '🎵 Listen',
-            watch: '📺 Watch',
-            eat: '🍽️ Eat',
-            do: '✨ Do'
-        };
-
+        const metadata = this.categoryMetadata[this.currentCategory] || { icon: '📋', name: this.currentCategory };
         const titleEl = document.getElementById('detail-title');
-        if (titleEl) titleEl.textContent = categoryNames[this.currentCategory];
+        if (titleEl) titleEl.textContent = `${metadata.icon} ${metadata.name}`;
 
         this.renderDetailItems();
         this.renderDetailCollections();
@@ -605,12 +658,16 @@ class AnygoodApp {
             html += '</div>';
         }
 
-        // Completed items
+        // Completed items (collapsed by default)
         if (completedItems.length > 0) {
+            const isExpanded = this.completedItemsExpanded[this.currentCategory] || false;
             html += `
-                <div class="completed-section">
-                    <h4 class="completed-header">Completed (${completedItems.length})</h4>
-                    <div class="items-container">
+                <div class="completed-section ${isExpanded ? 'expanded' : ''}">
+                    <h4 class="completed-header" onclick="app.toggleCompletedItems()" style="cursor: pointer;">
+                        <span class="completed-toggle">${isExpanded ? '▼' : '▶'}</span>
+                        Completed (${completedItems.length})
+                    </h4>
+                    <div class="items-container completed-items-container" ${isExpanded ? '' : 'style="display: none;"'}>
             `;
             completedItems.forEach((item) => {
                 const actualIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
@@ -1340,6 +1397,215 @@ class AnygoodApp {
         this.updateCategoryCounts();
         this.openCategory(category);
         this.showNotification(`Imported ${imported} items`, 'success');
+    }
+
+    // Quick Add from Main View
+    async quickAddFromMain() {
+        const input = document.getElementById('quick-add-input');
+        if (!input) return;
+
+        const text = input.value.trim();
+        if (!text) return;
+
+        try {
+            this.showLoading('Processing...');
+            
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            // Determine category
+            let category = parsed.category;
+            if (!category) {
+                // Auto-categorize
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
+            }
+
+            // Ensure category exists
+            if (!this.categories.includes(category)) {
+                // Create category if it doesn't exist
+                this.addCategorySilently(category, parsed.title || text);
+            }
+
+            // Create item
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || text,
+                completed: false
+            };
+
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                // Extract metadata in background
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+
+            // Generate tags
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+
+            // Add to category
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+
+            // Clear input
+            input.value = '';
+            input.focus();
+
+            this.hideLoading();
+            this.showNotification(`Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+
+            // Optionally open the category
+            setTimeout(() => {
+                if (confirm(`Item added! Open ${this.categoryMetadata[category]?.name || category}?`)) {
+                    this.openCategory(category);
+                }
+            }, 500);
+
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Quick add error:', error);
+        }
+    }
+
+    // Category Management
+    showAddCategoryModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        modalBody.innerHTML = `
+            <h2>Create New Category</h2>
+            <input type="text" id="category-name-input" placeholder="Category name..." autofocus>
+            <div style="margin-top: 12px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85em;">Icon (emoji):</label>
+                <input type="text" id="category-icon-input" placeholder="📋" maxlength="2" style="font-size: 24px; text-align: center;">
+            </div>
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <button onclick="app.addCategory()">Create</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+
+        const nameInput = document.getElementById('category-name-input');
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addCategory();
+        });
+    }
+
+    addCategory() {
+        const nameInput = document.getElementById('category-name-input');
+        const iconInput = document.getElementById('category-icon-input');
+        
+        const name = nameInput.value.trim();
+        const icon = iconInput.value.trim() || '📋';
+
+        if (!name) {
+            this.showNotification('Please enter a category name', 'error');
+            return;
+        }
+
+        // Create slug from name
+        const slug = name.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        if (this.categories.includes(slug)) {
+            this.showNotification('Category already exists', 'error');
+            return;
+        }
+
+        // Add category
+        this.categories.push(slug);
+        this.categoryMetadata[slug] = { icon: icon, name: name };
+        this.items[slug] = [];
+        this.collections[slug] = [];
+        this.completedItemsExpanded[slug] = false;
+
+        this.saveState();
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+
+        this.renderOverview();
+        this.closeModal();
+        this.showNotification(`Category "${name}" created`, 'success');
+    }
+
+    addCategorySilently(slug, name) {
+        if (this.categories.includes(slug)) return;
+
+        this.categories.push(slug);
+        this.categoryMetadata[slug] = { 
+            icon: this.getCategoryIcon(slug), 
+            name: name || slug.charAt(0).toUpperCase() + slug.slice(1)
+        };
+        this.items[slug] = [];
+        this.collections[slug] = [];
+        this.completedItemsExpanded[slug] = false;
+
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+    }
+
+    getCategoryIcon(slug) {
+        // Try to infer icon from category name
+        const iconMap = {
+            'read': '📚', 'listen': '🎵', 'watch': '📺', 'eat': '🍽️', 'do': '✨',
+            'book': '📚', 'music': '🎵', 'movie': '📺', 'food': '🍽️', 'activity': '✨',
+            'travel': '✈️', 'shop': '🛍️', 'learn': '📖', 'exercise': '💪', 'play': '🎮'
+        };
+        return iconMap[slug] || '📋';
+    }
+
+    deleteCategory(categorySlug) {
+        // Don't allow deleting default categories
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        if (defaultCategories.includes(categorySlug)) {
+            this.showNotification('Cannot delete default categories', 'error');
+            return;
+        }
+
+        if (!confirm(`Delete category "${this.categoryMetadata[categorySlug]?.name || categorySlug}" and all its items?`)) {
+            return;
+        }
+
+        // Remove category
+        this.categories = this.categories.filter(cat => cat !== categorySlug);
+        delete this.categoryMetadata[categorySlug];
+        delete this.items[categorySlug];
+        delete this.collections[categorySlug];
+        delete this.completedItemsExpanded[categorySlug];
+
+        // If currently viewing this category, go back
+        if (this.currentCategory === categorySlug) {
+            this.closeCategory();
+        }
+
+        this.saveState();
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+
+        this.renderOverview();
+        this.showNotification('Category deleted', 'success');
+    }
+
+    toggleCompletedItems() {
+        if (!this.currentCategory) return;
+        this.completedItemsExpanded[this.currentCategory] = !this.completedItemsExpanded[this.currentCategory];
+        this.renderDetailItems();
     }
 
     // Utilities
