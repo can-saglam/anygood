@@ -1,11 +1,45 @@
+// Enhanced AnygoodApp with all improvements and AI features
 class AnygoodApp {
     constructor() {
-        this.categories = ['read', 'listen', 'watch', 'eat', 'do'];
-        this.items = this.loadFromStorage('items') || {};
-        this.collections = this.loadFromStorage('collections') || {};
-        this.pendingToggle = null; // Track pending toggle timeout
+        // Initialize modules
+        this.storage = new StorageManager();
+        this.storage.showError = (msg) => this.showNotification(msg, 'error');
+        this.rssParser = new RSSParser();
+        this.metadataExtractor = new MetadataExtractor();
+        this.duplicateDetector = new DuplicateDetector();
+        this.searchEngine = new SearchEngine();
+        this.aiFeatures = new AIFeatures();
+        this.undoRedo = new UndoRedoManager();
 
-        // Suggested sources for each category
+        // Core data - load categories from storage or use defaults
+        const savedCategories = this.storage.load('categories');
+        this.categories = savedCategories || ['read', 'listen', 'watch', 'eat', 'do'];
+        this.categoryMetadata = this.storage.load('categoryMetadata') || {
+            read: { icon: '📚', name: 'Read' },
+            listen: { icon: '🎵', name: 'Listen' },
+            watch: { icon: '📺', name: 'Watch' },
+            eat: { icon: '🍽️', name: 'Eat' },
+            do: { icon: '✨', name: 'Do' }
+        };
+        this.items = this.storage.load('items') || {};
+        this.collections = this.storage.load('collections') || {};
+        this.currentCategory = null;
+        this.selectedItems = new Set();
+        this.bulkMode = false;
+        this.pendingToggle = null;
+        this.isLoading = false;
+        this.completedItemsExpanded = {}; // Track which categories have completed items expanded
+
+        // Initialize categories
+        this.categories.forEach(cat => {
+            if (!this.items[cat]) this.items[cat] = [];
+            if (!this.collections[cat]) this.collections[cat] = [];
+            if (this.completedItemsExpanded[cat] === undefined) {
+                this.completedItemsExpanded[cat] = false; // Collapsed by default
+            }
+        });
+
+        // Suggested sources
         this.suggestedSources = {
             read: [
                 { name: 'London Review of Books', url: 'https://www.lrb.co.uk/feed', type: 'rss' },
@@ -30,17 +64,13 @@ class AnygoodApp {
             ]
         };
 
-        this.categories.forEach(cat => {
-            if (!this.items[cat]) this.items[cat] = [];
-            if (!this.collections[cat]) this.collections[cat] = [];
-        });
-
-        // Populate with placeholder data if empty
+        // Populate placeholder data if first run
         if (this.isFirstRun()) {
             this.populatePlaceholderData();
         }
 
-        this.currentCategory = null;
+        // Save initial state for undo
+        this.saveState();
 
         this.init();
     }
@@ -243,7 +273,7 @@ class AnygoodApp {
             }
         ];
 
-        // READ collections
+        // Collections (simplified - keeping main structure)
         this.collections.read = [
             {
                 id: Date.now() - 6000,
@@ -263,23 +293,11 @@ class AnygoodApp {
                         description: 'Zadie Smith - Four Londoners reconnect in northwest London',
                         link: 'https://www.goodreads.com/book/show/13486385-nw',
                         completed: false
-                    },
-                    { id: Date.now() - 6003, text: 'Brick Lane - Monica Ali', completed: false }
-                ]
-            },
-            {
-                id: Date.now() - 6010,
-                name: 'Creative Inspo',
-                curated: true,
-                items: [
-                    { id: Date.now() - 6011, text: 'The Creative Act - Rick Rubin', completed: false },
-                    { id: Date.now() - 6012, text: 'How to Do Nothing - Jenny Odell', completed: false },
-                    { id: Date.now() - 6013, text: 'Ways of Seeing - John Berger', completed: false }
+                    }
                 ]
             }
         ];
 
-        // LISTEN collections
         this.collections.listen = [
             {
                 id: Date.now() - 7000,
@@ -287,137 +305,36 @@ class AnygoodApp {
                 curated: true,
                 items: [
                     { id: Date.now() - 7001, text: 'Overmono - Good Lies', completed: false },
-                    { id: Date.now() - 7002, text: 'Fred again.. - actual life', completed: false },
-                    { id: Date.now() - 7003, text: 'Joy Orbison - Still Slipping Vol. 1', completed: false },
-                    { id: Date.now() - 7004, text: 'Burial - Untrue', completed: false }
-                ]
-            },
-            {
-                id: Date.now() - 7010,
-                name: 'NTS Resident Mixes',
-                curated: true,
-                items: [
-                    { id: Date.now() - 7011, text: 'Floating Points @ NTS', completed: false },
-                    { id: Date.now() - 7012, text: 'Josey Rebelle show', completed: false },
-                    { id: Date.now() - 7013, text: 'Hunee - Hunch Music', completed: false }
+                    { id: Date.now() - 7002, text: 'Fred again.. - actual life', completed: false }
                 ]
             }
         ];
 
-        // WATCH collections
-        this.collections.watch = [
-            {
-                id: Date.now() - 8000,
-                name: 'A24 Must-Watch',
-                curated: true,
-                items: [
-                    { id: Date.now() - 8001, text: 'Past Lives', completed: false },
-                    { id: Date.now() - 8002, text: 'Aftersun', completed: false },
-                    { id: Date.now() - 8003, text: 'Everything Everywhere All at Once', completed: false },
-                    { id: Date.now() - 8004, text: 'The Whale', completed: false }
-                ]
-            }
-        ];
-
-        // EAT collections
-        this.collections.eat = [
-            {
-                id: Date.now() - 9000,
-                name: 'Hackney Classics',
-                curated: true,
-                items: [
-                    {
-                        id: Date.now() - 9001,
-                        text: 'Mangal 2',
-                        description: 'Turkish charcoal grill on Stoke Newington Road',
-                        link: 'https://www.mangal2.com',
-                        completed: false
-                    },
-                    {
-                        id: Date.now() - 9002,
-                        text: 'The Marksman',
-                        description: 'Elevated British pub fare in a Victorian corner pub',
-                        link: 'https://marksmanpublichouse.com',
-                        completed: false
-                    },
-                    {
-                        id: Date.now() - 9003,
-                        text: 'Towpath Cafe',
-                        description: 'Seasonal canal-side cafe on Regent\'s Canal',
-                        completed: false
-                    },
-                    { id: Date.now() - 9004, text: 'E5 Bakehouse sourdough', completed: false },
-                    { id: Date.now() - 9005, text: 'P. Franco wine bar', completed: false }
-                ]
-            },
-            {
-                id: Date.now() - 9010,
-                name: 'Natural Wine Spots',
-                curated: true,
-                items: [
-                    { id: Date.now() - 9011, text: 'Bright - wine & snacks', completed: false },
-                    { id: Date.now() - 9012, text: 'Sager + Wilde', completed: false },
-                    { id: Date.now() - 9013, text: 'Bar Crispin', completed: false },
-                    { id: Date.now() - 9014, text: '40 Maltby Street', completed: false }
-                ]
-            },
-            {
-                id: Date.now() - 9020,
-                name: 'Special Occasion',
-                curated: true,
-                items: [
-                    { id: Date.now() - 9021, text: 'Lyle\'s tasting menu', completed: false },
-                    { id: Date.now() - 9022, text: 'St. JOHN Bread and Wine', completed: false },
-                    { id: Date.now() - 9023, text: 'Rochelle Canteen', completed: false }
-                ]
-            }
-        ];
-
-        // DO collections
-        this.collections.do = [
-            {
-                id: Date.now() - 10000,
-                name: 'Weekend Vibes',
-                curated: true,
-                items: [
-                    {
-                        id: Date.now() - 10001,
-                        text: 'Columbia Road Flower Market',
-                        description: 'Sunday morning flower market in East London',
-                        link: 'https://www.columbiaroad.info',
-                        completed: false
-                    },
-                    {
-                        id: Date.now() - 10002,
-                        text: 'Broadway Market',
-                        description: 'Saturday market with food stalls and vintage finds',
-                        completed: false
-                    },
-                    { id: Date.now() - 10003, text: 'Vintage at Beyond Retro', completed: false },
-                    { id: Date.now() - 10004, text: 'Gallery hopping in Shoreditch', completed: false }
-                ]
-            },
-            {
-                id: Date.now() - 10010,
-                name: 'Wellness & Movement',
-                curated: true,
-                items: [
-                    { id: Date.now() - 10011, text: 'London Fields Lido swim', completed: false },
-                    { id: Date.now() - 10012, text: 'Yoga at Frame Shoreditch', completed: false },
-                    { id: Date.now() - 10013, text: 'Ironmonger Row sauna', completed: false },
-                    { id: Date.now() - 10014, text: 'Ride to Epping Forest', completed: false }
-                ]
-            }
-        ];
-
-        this.saveToStorage('items', this.items);
-        this.saveToStorage('collections', this.collections);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
     }
 
     init() {
         this.setupModalClose();
+        this.setupKeyboardShortcuts();
+        this.setupDarkMode();
+        this.setupSearch();
+        this.setupQuickAdd();
         this.renderOverview();
         this.checkForSharedData();
+        this.updateCategoryCounts();
+    }
+
+    setupQuickAdd() {
+        const input = document.getElementById('quick-add-input');
+        if (input) {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.quickAddFromMain();
+                }
+            });
+        }
     }
 
     setupModalClose() {
@@ -427,11 +344,138 @@ class AnygoodApp {
                 this.closeModal();
             }
         });
+        // ESC key to close modal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.style.display === 'block') {
+                this.closeModal();
+            }
+        });
+    }
+
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+            // Cmd/Ctrl + N: New item
+            if (cmdOrCtrl && e.key === 'n' && this.currentCategory) {
+                e.preventDefault();
+                this.showAddItemModal();
+            }
+
+            // Cmd/Ctrl + Z: Undo
+            if (cmdOrCtrl && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.undo();
+            }
+
+            // Cmd/Ctrl + Shift + Z: Redo
+            if (cmdOrCtrl && e.key === 'z' && e.shiftKey) {
+                e.preventDefault();
+                this.redo();
+            }
+
+            // Cmd/Ctrl + A: Select all (in bulk mode)
+            if (cmdOrCtrl && e.key === 'a' && this.bulkMode) {
+                e.preventDefault();
+                this.selectAllItems();
+            }
+
+            // Delete/Backspace: Delete selected items (in bulk mode)
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this.bulkMode && this.selectedItems.size > 0) {
+                e.preventDefault();
+                this.deleteSelectedItems();
+            }
+        });
+    }
+
+    setupDarkMode() {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+        const updateDarkMode = (e) => {
+            document.documentElement.classList.toggle('dark-mode', e.matches);
+        };
+        updateDarkMode(prefersDark);
+        prefersDark.addEventListener('change', updateDarkMode);
+    }
+
+    setupSearch() {
+        // Search functionality removed from detail view
+    }
+
+    // State management
+    saveState() {
+        const state = {
+            items: JSON.parse(JSON.stringify(this.items)),
+            collections: JSON.parse(JSON.stringify(this.collections))
+        };
+        this.undoRedo.saveState(state);
+    }
+
+    undo() {
+        const state = this.undoRedo.undo();
+        if (state) {
+            this.items = state.items;
+            this.collections = state.collections;
+            this.storage.save('items', this.items);
+            this.storage.save('collections', this.collections);
+            this.renderDetail();
+            this.renderOverview();
+            this.showNotification('Undone', 'success');
+        }
+    }
+
+    redo() {
+        const state = this.undoRedo.redo();
+        if (state) {
+            this.items = state.items;
+            this.collections = state.collections;
+            this.storage.save('items', this.items);
+            this.storage.save('collections', this.collections);
+            this.renderDetail();
+            this.renderOverview();
+            this.showNotification('Redone', 'success');
+        }
+    }
+
+    // Notifications
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    showLoading(message = 'Loading...') {
+        this.isLoading = true;
+        const loading = document.createElement('div');
+        loading.id = 'loading-overlay';
+        loading.innerHTML = `
+            <div class="loading-spinner"></div>
+            <p>${message}</p>
+        `;
+        document.body.appendChild(loading);
+    }
+
+    hideLoading() {
+        this.isLoading = false;
+        const loading = document.getElementById('loading-overlay');
+        if (loading) loading.remove();
     }
 
     // Navigation
     openCategory(category) {
         this.currentCategory = category;
+        this.selectedItems.clear();
+        this.bulkMode = false;
         document.getElementById('overview-screen').classList.remove('active');
         document.getElementById('detail-screen').classList.add('active');
         this.renderDetail();
@@ -439,6 +483,8 @@ class AnygoodApp {
 
     closeCategory() {
         this.currentCategory = null;
+        this.selectedItems.clear();
+        this.bulkMode = false;
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
@@ -446,37 +492,79 @@ class AnygoodApp {
 
     // Rendering
     renderOverview() {
-        this.categories.forEach(category => {
-            const count = this.items[category].filter(item => !item.completed).length;
-            document.getElementById(`${category}-count`).textContent = count;
+        const grid = document.getElementById('category-grid');
+        if (!grid) return;
+
+        // Clear existing custom categories (keep default structure)
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const customCategories = this.categories.filter(cat => !defaultCategories.includes(cat));
+
+        // Render default categories
+        defaultCategories.forEach(category => {
+            const count = (this.items[category] || []).filter(item => !item.completed).length;
+            const countEl = document.getElementById(`${category}-count`);
+            if (countEl) countEl.textContent = count;
+        });
+
+        // Render custom categories
+        const existingCustom = grid.querySelectorAll('.category-card.custom');
+        existingCustom.forEach(el => el.remove());
+
+        customCategories.forEach(category => {
+            const metadata = this.categoryMetadata[category] || { icon: '📋', name: category };
+            const count = (this.items[category] || []).filter(item => !item.completed).length;
+            
+            const card = document.createElement('div');
+            card.className = 'category-card custom';
+            card.setAttribute('data-category', category);
+            card.setAttribute('role', 'button');
+            card.setAttribute('tabindex', '0');
+            card.setAttribute('aria-label', `${metadata.name} category`);
+            card.onclick = () => this.openCategory(category);
+            
+            card.innerHTML = `
+                <div class="category-icon" aria-hidden="true">${metadata.icon}</div>
+                <h2>${this.escapeHtml(metadata.name)}</h2>
+                <div class="category-count" id="${category}-count" aria-label="${count} uncompleted items">${count}</div>
+                <button class="category-delete-btn" onclick="event.stopPropagation(); app.deleteCategory('${category}')" 
+                        title="Delete category" aria-label="Delete category">×</button>
+            `;
+            
+            grid.appendChild(card);
         });
     }
 
-    renderDetail() {
-        const category = this.currentCategory;
-        const categoryNames = {
-            read: '📚 Read',
-            listen: '🎵 Listen',
-            watch: '📺 Watch',
-            eat: '🍽️ Eat',
-            do: '✨ Do'
-        };
+    updateCategoryCounts() {
+        this.renderOverview();
+    }
 
-        document.getElementById('detail-title').textContent = categoryNames[category];
+    renderDetail() {
+        if (!this.currentCategory) return;
+
+        const metadata = this.categoryMetadata[this.currentCategory] || { icon: '📋', name: this.currentCategory };
+        const titleEl = document.getElementById('detail-title');
+        if (titleEl) titleEl.textContent = `${metadata.icon} ${metadata.name}`;
+
         this.renderDetailItems();
         this.renderDetailCollections();
     }
 
     renderDetailItems() {
         const listElement = document.getElementById('detail-items-list');
-        const items = this.items[this.currentCategory];
+        if (!listElement) return;
+
+        const items = this.items[this.currentCategory] || [];
 
         if (items.length === 0) {
-            listElement.innerHTML = '<div class="empty-state">No items yet. Tap + to add one.</div>';
+            listElement.innerHTML = `
+                <div class="empty-state">
+                    No items yet. Tap + to add one.
+                </div>
+            `;
             return;
         }
 
-        // Separate active and completed items
+        // Separate active and completed
         const activeItems = items.filter(item => !item.completed);
         const completedItems = items.filter(item => item.completed);
 
@@ -485,16 +573,24 @@ class AnygoodApp {
         // Active items
         if (activeItems.length > 0) {
             html += '<div class="items-container">';
-            activeItems.forEach((item, idx) => {
-                const actualIndex = items.indexOf(item);
+            activeItems.forEach((item) => {
+                const actualIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
                 const hasMetadata = item.description || item.link;
+                const isSelected = this.selectedItems.has(item.id);
 
                 html += `
-                    <div class="item ${hasMetadata ? 'has-metadata' : ''}" data-item-id="${item.id}">
+                    <div class="item ${hasMetadata ? 'has-metadata' : ''} ${isSelected ? 'selected' : ''}" 
+                         data-item-id="${item.id}">
+                        ${this.bulkMode ? `
+                            <div class="item-checkbox-bulk" onclick="app.toggleItemSelection(${item.id})">
+                                ${isSelected ? '✓' : ''}
+                            </div>
+                        ` : ''}
                         <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
                         <div class="item-content">
                             <div class="item-text">${this.escapeHtml(item.text)}</div>
                             ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                            ${item.tags ? `<div class="item-tags">${item.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}</div>` : ''}
                             ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
@@ -502,25 +598,35 @@ class AnygoodApp {
                                 ${this.escapeHtml(new URL(item.link).hostname)}
                             </a>` : ''}
                         </div>
-                        <div class="item-actions">
-                            <button onclick="app.showAddToCollectionModal(${actualIndex})" title="Add to collection">📁</button>
-                            <button onclick="app.deleteItem(${actualIndex})" title="Delete">🗑️</button>
-                        </div>
+                        ${!this.bulkMode ? `
+                            <div class="item-actions">
+                                <button onclick="app.showAddToCollectionModal(${actualIndex})" 
+                                        title="Add to collection"
+                                        aria-label="Add to collection">📁</button>
+                                <button onclick="app.deleteItem(${actualIndex})" 
+                                        title="Delete"
+                                        aria-label="Delete item">🗑️</button>
+                            </div>
+                        ` : ''}
                     </div>
                 `;
             });
             html += '</div>';
         }
 
-        // Completed items section
+        // Completed items (collapsed by default)
         if (completedItems.length > 0) {
+            const isExpanded = this.completedItemsExpanded[this.currentCategory] || false;
             html += `
-                <div class="completed-section">
-                    <h4 class="completed-header">Completed (${completedItems.length})</h4>
-                    <div class="items-container">
+                <div class="completed-section ${isExpanded ? 'expanded' : ''}">
+                    <h4 class="completed-header" onclick="app.toggleCompletedItems()" style="cursor: pointer;">
+                        <span class="completed-toggle">${isExpanded ? '▼' : '▶'}</span>
+                        Completed (${completedItems.length})
+                    </h4>
+                    <div class="items-container completed-items-container" ${isExpanded ? '' : 'style="display: none;"'}>
             `;
-            completedItems.forEach((item, idx) => {
-                const actualIndex = items.indexOf(item);
+            completedItems.forEach((item) => {
+                const actualIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
                 const hasMetadata = item.description || item.link;
 
                 html += `
@@ -548,9 +654,13 @@ class AnygoodApp {
         listElement.innerHTML = html;
     }
 
+    // Search functionality removed from detail view
+
     renderDetailCollections() {
         const collectionsElement = document.getElementById('detail-collections');
-        const collections = this.collections[this.currentCategory];
+        if (!collectionsElement) return;
+
+        const collections = this.collections[this.currentCategory] || [];
 
         if (collections.length === 0) {
             collectionsElement.innerHTML = '<div class="empty-state">No collections yet</div>';
@@ -561,7 +671,7 @@ class AnygoodApp {
             <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
                 <div class="collection-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})">▸</button>
+                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})" aria-label="Toggle collection">▸</button>
                         <span class="collection-name">
                             ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
@@ -569,7 +679,7 @@ class AnygoodApp {
                     </div>
                     <div class="collection-actions">
                         <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
-                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete">🗑️</button>
+                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
                     </div>
                 </div>
                 <div class="collection-items">
@@ -602,16 +712,19 @@ class AnygoodApp {
         `).join('');
     }
 
-    // Items
+    // Items - Enhanced with AI and metadata
     showAddItemModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
 
         modalBody.innerHTML = `
             <h2>New Item</h2>
-            <input type="text" id="item-input" placeholder="Title..." autofocus>
+            <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
+                Try natural language: "Read 'The Creative Act' by Rick Rubin"
+            </p>
+            <input type="text" id="item-input" placeholder="Title or natural language..." autofocus>
             <textarea id="item-description" placeholder="Description (optional)" rows="2"></textarea>
-            <input type="url" id="item-link" placeholder="Link (optional)">
+            <input type="url" id="item-link" placeholder="Link (optional - metadata will be auto-extracted)">
             <div class="modal-buttons">
                 <button class="secondary" onclick="app.closeModal()">Cancel</button>
                 <button onclick="app.addItem()">Add</button>
@@ -620,24 +733,86 @@ class AnygoodApp {
 
         modal.style.display = 'block';
 
-        document.getElementById('item-input').addEventListener('keypress', (e) => {
+        const input = document.getElementById('item-input');
+        input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 this.addItem();
             }
         });
+
+        // Auto-detect if it's natural language
+        input.addEventListener('blur', async () => {
+            const text = input.value.trim();
+            if (text && text.length > 10 && !document.getElementById('item-link').value) {
+                const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+                if (parsed.title && parsed.title !== text) {
+                    input.value = parsed.title;
+                    if (parsed.description) {
+                        document.getElementById('item-description').value = parsed.description;
+                    }
+                    if (parsed.link) {
+                        document.getElementById('item-link').value = parsed.link;
+                    }
+                }
+            }
+        });
     }
 
-    addItem() {
+    async addItem() {
         const input = document.getElementById('item-input');
         const descriptionInput = document.getElementById('item-description');
         const linkInput = document.getElementById('item-link');
 
         const text = input.value.trim();
-        const description = descriptionInput?.value.trim();
-        const link = linkInput?.value.trim();
+        let description = descriptionInput?.value.trim();
+        let link = linkInput?.value.trim();
 
-        if (text) {
+        if (!text) return;
+
+        // Try natural language parsing
+        const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+        if (parsed.title) {
+            const finalText = parsed.title;
+            if (!description && parsed.description) description = parsed.description;
+            if (!link && parsed.link) link = parsed.link;
+
+            // Auto-categorize if in wrong category
+            const suggestedCategory = await this.aiFeatures.autoCategorize({ text: finalText, description });
+            if (suggestedCategory !== this.currentCategory) {
+                // Could show a suggestion here
+            }
+
+            // Generate tags
+            const tags = this.aiFeatures.generateTags({ text: finalText, description });
+
+            const newItem = {
+                id: Date.now(),
+                text: finalText,
+                completed: false
+            };
+
+            if (description) newItem.description = description;
+            if (link) {
+                newItem.link = link;
+                // Extract metadata in background
+                this.extractMetadataForItem(newItem);
+            }
+            if (tags.length > 0) newItem.tags = tags;
+            if (parsed.author) newItem.author = parsed.author;
+
+            this.items[this.currentCategory].push(newItem);
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.renderDetail();
+            this.updateCategoryCounts();
+            this.closeModal();
+            this.showNotification('Item added', 'success');
+
+            // Check for duplicates
+            setTimeout(() => this.checkDuplicates(), 500);
+        } else {
+            // Fallback to simple add
             const newItem = {
                 id: Date.now(),
                 text: text,
@@ -645,92 +820,179 @@ class AnygoodApp {
             };
 
             if (description) newItem.description = description;
-            if (link) newItem.link = link;
+            if (link) {
+                newItem.link = link;
+                this.extractMetadataForItem(newItem);
+            }
 
             this.items[this.currentCategory].push(newItem);
-
-            this.saveToStorage('items', this.items);
+            this.saveState();
+            this.storage.save('items', this.items);
             this.renderDetail();
+            this.updateCategoryCounts();
             this.closeModal();
+            this.showNotification('Item added', 'success');
+        }
+    }
+
+    async extractMetadataForItem(item) {
+        if (!item.link) return;
+
+        try {
+            this.showLoading('Extracting metadata...');
+            const metadata = await this.metadataExtractor.extractMetadata(item.link);
+            
+            if (metadata.title && !item.text.includes(metadata.title)) {
+                // Could update title if it's better
+            }
+            if (metadata.description && !item.description) {
+                item.description = metadata.description;
+            }
+            if (metadata.image && !item.image) {
+                item.image = metadata.image;
+            }
+            if (metadata.author && !item.author) {
+                item.author = metadata.author;
+            }
+
+            this.storage.save('items', this.items);
+            this.renderDetail();
+        } catch (error) {
+            console.error('Metadata extraction failed:', error);
+        } finally {
+            this.hideLoading();
         }
     }
 
     toggleItem(index) {
-        const item = this.items[this.currentCategory][index];
+        if (this.bulkMode) {
+            const item = this.items[this.currentCategory][index];
+            this.toggleItemSelection(item.id);
+            return;
+        }
 
-        // Clear any pending toggle timeout
+        const item = this.items[this.currentCategory][index];
         if (this.pendingToggle) {
             clearTimeout(this.pendingToggle);
             this.pendingToggle = null;
         }
 
-        // Toggle the completion state
         item.completed = !item.completed;
 
-        // Just update the checkbox visually without re-rendering
         const itemElement = document.querySelector(`.item[data-item-id="${item.id}"]`);
         if (itemElement) {
-            if (item.completed) {
-                itemElement.classList.add('completed');
-            } else {
-                itemElement.classList.remove('completed');
-            }
+            itemElement.classList.toggle('completed', item.completed);
         }
 
-        this.saveToStorage('items', this.items);
+        this.saveState();
+        this.storage.save('items', this.items);
+        this.updateCategoryCounts();
 
-        // Move to appropriate section after 2 second delay with animation
         this.pendingToggle = setTimeout(() => {
-            // Find the item by id
             const currentIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
-
             if (currentIndex !== -1) {
-                // Add moving-out animation class to the specific item using its data-item-id
                 const itemEl = document.querySelector(`.item[data-item-id="${item.id}"]`);
-                if (itemEl) {
-                    itemEl.classList.add('moving-out');
-                }
+                if (itemEl) itemEl.classList.add('moving-out');
 
-                // Wait for animation to complete, then move the item
                 setTimeout(() => {
-                    // Remove item from current position
                     const movedItem = this.items[this.currentCategory].splice(currentIndex, 1)[0];
-                    // Add to end of list
                     this.items[this.currentCategory].push(movedItem);
-
-                    this.saveToStorage('items', this.items);
-
-                    // Re-render and add moving-in animation to the new position
+                    this.saveState();
+                    this.storage.save('items', this.items);
                     this.renderDetail();
 
-                    // Find and animate the newly positioned item using data-item-id
                     setTimeout(() => {
                         const newItemElement = document.querySelector(`.item[data-item-id="${item.id}"]`);
-                        if (newItemElement) {
-                            newItemElement.classList.add('moving-in');
-                        }
+                        if (newItemElement) newItemElement.classList.add('moving-in');
                     }, 50);
-                }, 400); // Match the slideOut animation duration
+                }, 400);
             }
-
             this.pendingToggle = null;
         }, 2000);
+    }
+
+    toggleItemSelection(itemId) {
+        if (this.selectedItems.has(itemId)) {
+            this.selectedItems.delete(itemId);
+        } else {
+            this.selectedItems.add(itemId);
+        }
+        this.renderDetailItems();
+    }
+
+    toggleBulkMode() {
+        this.bulkMode = !this.bulkMode;
+        this.selectedItems.clear();
+        this.renderDetailItems();
+        this.showNotification(this.bulkMode ? 'Bulk mode enabled' : 'Bulk mode disabled', 'info');
+    }
+
+    selectAllItems() {
+        const items = this.items[this.currentCategory].filter(item => !item.completed);
+        items.forEach(item => this.selectedItems.add(item.id));
+        this.renderDetailItems();
+    }
+
+    deleteSelectedItems() {
+        if (this.selectedItems.size === 0) return;
+        if (confirm(`Delete ${this.selectedItems.size} selected item(s)?`)) {
+            this.items[this.currentCategory] = this.items[this.currentCategory].filter(
+                item => !this.selectedItems.has(item.id)
+            );
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.selectedItems.clear();
+            this.bulkMode = false;
+            this.renderDetail();
+            this.updateCategoryCounts();
+            this.showNotification('Items deleted', 'success');
+        }
     }
 
     deleteItem(index) {
         if (confirm('Delete this item?')) {
             this.items[this.currentCategory].splice(index, 1);
-            this.saveToStorage('items', this.items);
+            this.saveState();
+            this.storage.save('items', this.items);
             this.renderDetail();
+            this.updateCategoryCounts();
+            this.showNotification('Item deleted', 'success');
         }
     }
+
+    checkDuplicates() {
+        const items = this.items[this.currentCategory];
+        const duplicates = this.duplicateDetector.findDuplicates(items);
+        
+        if (duplicates.length > 0) {
+            const dup = duplicates[0];
+            if (confirm(`Found ${dup.items.length} similar items. Merge them?`)) {
+                const merged = this.duplicateDetector.mergeItems(dup.items);
+                // Remove duplicates
+                dup.indices.reverse().forEach(idx => {
+                    if (idx !== dup.indices[0]) {
+                        this.items[this.currentCategory].splice(idx, 1);
+                    }
+                });
+                // Update first item with merged data
+                const firstIdx = dup.indices[0];
+                this.items[this.currentCategory][firstIdx] = { ...this.items[this.currentCategory][firstIdx], ...merged };
+                this.saveState();
+                this.storage.save('items', this.items);
+                this.renderDetail();
+                this.showNotification('Duplicates merged', 'success');
+            }
+        }
+    }
+
+    // [Continue with remaining methods - Collections, Import, Export, etc.]
+    // Keeping methods from original but enhanced with error handling
 
     showAddToCollectionModal(itemIndex) {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
-
         const item = this.items[this.currentCategory][itemIndex];
-        const collections = this.collections[this.currentCategory];
+        const collections = this.collections[this.currentCategory] || [];
 
         let collectionsHTML = '';
         if (collections.length === 0) {
@@ -752,20 +1014,19 @@ class AnygoodApp {
                 <button class="secondary" onclick="app.closeModal()">Cancel</button>
             </div>
         `;
-
         modal.style.display = 'block';
     }
 
     addItemToCollection(itemIndex, collectionIndex) {
         const item = this.items[this.currentCategory][itemIndex];
         const collection = this.collections[this.currentCategory][collectionIndex];
-
         if (!collection.items.find(i => i.id === item.id)) {
             collection.items.push({ ...item });
-            this.saveToStorage('collections', this.collections);
+            this.saveState();
+            this.storage.save('collections', this.collections);
             this.renderDetail();
+            this.showNotification('Added to collection', 'success');
         }
-
         this.closeModal();
     }
 
@@ -773,7 +1034,6 @@ class AnygoodApp {
     showImportModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
-
         const sources = this.suggestedSources[this.currentCategory] || [];
         const sourcesHTML = sources.length > 0 ? `
             <div style="margin-bottom: 16px;">
@@ -801,30 +1061,38 @@ class AnygoodApp {
                 <button onclick="app.processImport()">Import</button>
             </div>
         `;
-
         modal.style.display = 'block';
     }
 
     async quickImport(url, name) {
-        const items = await this.parseURL(url);
+        try {
+            this.showLoading(`Importing from ${name}...`);
+            const items = await this.rssParser.parseURL(url);
+            this.hideLoading();
 
-        if (items.length > 0) {
-            this.collections[this.currentCategory].push({
-                id: Date.now(),
-                name: name,
-                items: items.map(text => ({
-                    id: Date.now() + Math.random(),
-                    text: text,
-                    completed: false
-                })),
-                expanded: true
-            });
-
-            this.saveToStorage('collections', this.collections);
-            this.renderDetail();
-            this.closeModal();
-        } else {
-            alert(`Could not fetch items from ${name}. The feed may be unavailable.`);
+            if (items.length > 0) {
+                this.collections[this.currentCategory].push({
+                    id: Date.now(),
+                    name: name,
+                    items: items.map(text => ({
+                        id: Date.now() + Math.random(),
+                        text: text,
+                        completed: false
+                    })),
+                    expanded: true
+                });
+                this.saveState();
+                this.storage.save('collections', this.collections);
+                this.renderDetail();
+                this.closeModal();
+                this.showNotification(`Imported ${items.length} items`, 'success');
+            } else {
+                this.hideLoading();
+                this.showNotification(`Could not fetch items from ${name}`, 'error');
+            }
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Import failed: ${error.message}`, 'error');
         }
     }
 
@@ -836,117 +1104,49 @@ class AnygoodApp {
 
         if (!input) return;
 
-        let items = [];
-
-        // Check if it's a URL
-        if (input.startsWith('http://') || input.startsWith('https://')) {
-            items = await this.parseURL(input);
-        } else {
-            // Parse as plain text list
-            items = this.parseTextList(input);
-        }
-
-        if (items.length > 0) {
-            this.collections[this.currentCategory].push({
-                id: Date.now(),
-                name: collectionName,
-                items: items.map(text => ({
-                    id: Date.now() + Math.random(),
-                    text: text,
-                    completed: false
-                })),
-                expanded: true
-            });
-
-            this.saveToStorage('collections', this.collections);
-            this.renderDetail();
-            this.closeModal();
-        } else {
-            alert('Could not parse any items. Please check your input.');
-        }
-    }
-
-    parseTextList(text) {
-        return text.split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .map(line => line.replace(/^[-*•]\s*/, ''));
-    }
-
-    async parseURL(url) {
         try {
-            // Try to detect the type of URL and parse accordingly
-            if (url.includes('rss') || url.includes('feed') || url.includes('.xml')) {
-                return await this.parseRSSFeed(url);
-            } else if (url.includes('spotify.com')) {
-                return this.parseSpotifyURL(url);
-            } else if (url.includes('letterboxd.com')) {
-                return this.parseLetterboxdURL(url);
+            this.showLoading('Processing import...');
+            let items = [];
+
+            if (input.startsWith('http://') || input.startsWith('https://')) {
+                items = await this.rssParser.parseURL(input);
             } else {
-                // Try to fetch as RSS anyway
-                return await this.parseRSSFeed(url);
-            }
-        } catch (error) {
-            console.error('Error parsing URL:', error);
-            return [];
-        }
-    }
-
-    async parseRSSFeed(url) {
-        try {
-            // Use a CORS proxy for RSS feeds
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-            const response = await fetch(proxyUrl);
-            const text = await response.text();
-
-            const parser = new DOMParser();
-            const xml = parser.parseFromString(text, 'text/xml');
-
-            const items = [];
-
-            // Try RSS 2.0 format
-            let entries = xml.querySelectorAll('item');
-            if (entries.length === 0) {
-                // Try Atom format
-                entries = xml.querySelectorAll('entry');
+                items = input.split('\n')
+                    .map(line => line.trim())
+                    .filter(line => line.length > 0)
+                    .map(line => line.replace(/^[-*•]\s*/, ''));
             }
 
-            entries.forEach(entry => {
-                const title = entry.querySelector('title')?.textContent;
-                if (title) {
-                    items.push(title.trim());
-                }
-            });
+            this.hideLoading();
 
-            return items.slice(0, 20); // Limit to 20 items
+            if (items.length > 0) {
+                this.collections[this.currentCategory].push({
+                    id: Date.now(),
+                    name: collectionName,
+                    items: items.map(text => ({
+                        id: Date.now() + Math.random(),
+                        text: text,
+                        completed: false
+                    })),
+                    expanded: true
+                });
+                this.saveState();
+                this.storage.save('collections', this.collections);
+                this.renderDetail();
+                this.closeModal();
+                this.showNotification(`Imported ${items.length} items`, 'success');
+            } else {
+                this.showNotification('Could not parse any items', 'error');
+            }
         } catch (error) {
-            console.error('RSS parsing error:', error);
-            return [];
+            this.hideLoading();
+            this.showNotification(`Import failed: ${error.message}`, 'error');
         }
-    }
-
-    parseSpotifyURL(url) {
-        // For Spotify, we'd need their API. For now, just extract the playlist name
-        const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
-        if (match) {
-            return [`Spotify playlist: ${match[1]} (requires Spotify API for full import)`];
-        }
-        return [];
-    }
-
-    parseLetterboxdURL(url) {
-        // For Letterboxd, we'd need to scrape or use their API
-        const match = url.match(/letterboxd\.com\/[^/]+\/list\/([^/]+)/);
-        if (match) {
-            return [`Letterboxd list: ${match[1]} (requires scraping for full import)`];
-        }
-        return [];
     }
 
     showAddCollectionModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
-
         modalBody.innerHTML = `
             <h2>New Collection</h2>
             <input type="text" id="collection-name-input" placeholder="Collection name..." autofocus>
@@ -955,10 +1155,10 @@ class AnygoodApp {
                 <button onclick="app.addCollection()">Create</button>
             </div>
         `;
-
         modal.style.display = 'block';
 
-        document.getElementById('collection-name-input').addEventListener('keypress', (e) => {
+        const input = document.getElementById('collection-name-input');
+        input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.addCollection();
         });
     }
@@ -966,7 +1166,6 @@ class AnygoodApp {
     addCollection() {
         const input = document.getElementById('collection-name-input');
         const name = input.value.trim();
-
         if (name) {
             this.collections[this.currentCategory].push({
                 id: Date.now(),
@@ -974,41 +1173,47 @@ class AnygoodApp {
                 items: [],
                 expanded: false
             });
-
-            this.saveToStorage('collections', this.collections);
+            this.saveState();
+            this.storage.save('collections', this.collections);
             this.renderDetail();
             this.closeModal();
+            this.showNotification('Collection created', 'success');
         }
     }
 
     toggleCollection(collectionIndex) {
         const collection = this.collections[this.currentCategory][collectionIndex];
         collection.expanded = !collection.expanded;
-        this.saveToStorage('collections', this.collections);
+        this.storage.save('collections', this.collections);
         this.renderDetail();
     }
 
     deleteCollection(collectionIndex) {
         if (confirm('Delete this collection?')) {
             this.collections[this.currentCategory].splice(collectionIndex, 1);
-            this.saveToStorage('collections', this.collections);
+            this.saveState();
+            this.storage.save('collections', this.collections);
             this.renderDetail();
+            this.showNotification('Collection deleted', 'success');
         }
     }
 
     deleteCollectionItem(collectionIndex, itemIndex) {
         this.collections[this.currentCategory][collectionIndex].items.splice(itemIndex, 1);
-        this.saveToStorage('collections', this.collections);
+        this.saveState();
+        this.storage.save('collections', this.collections);
         this.renderDetail();
     }
 
     addCollectionItemToMain(collectionIndex, itemIndex) {
         const collectionItem = this.collections[this.currentCategory][collectionIndex].items[itemIndex];
-
         if (!this.items[this.currentCategory].find(i => i.id === collectionItem.id)) {
             this.items[this.currentCategory].push({ ...collectionItem, completed: false });
-            this.saveToStorage('items', this.items);
+            this.saveState();
+            this.storage.save('items', this.items);
             this.renderDetail();
+            this.updateCategoryCounts();
+            this.showNotification('Item added to list', 'success');
         }
     }
 
@@ -1016,41 +1221,24 @@ class AnygoodApp {
     showExportModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modal-body');
-
         modalBody.innerHTML = `
             <h2>Export & Share</h2>
             <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px;">Share your ${this.currentCategory} list with others</p>
-
             <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button onclick="app.exportAsJSON()" style="justify-content: center;">
-                    📥 Download as JSON
-                </button>
-                <button onclick="app.generateShareLink()" style="justify-content: center;">
-                    🔗 Generate Share Link
-                </button>
-                <button class="secondary" onclick="app.closeModal()">
-                    Cancel
-                </button>
+                <button onclick="app.exportAsJSON()" style="justify-content: center;">📥 Download as JSON</button>
+                <button onclick="app.generateShareLink()" style="justify-content: center;">🔗 Generate Share Link</button>
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
             </div>
             <div id="share-output" style="margin-top: 16px;"></div>
         `;
-
         modal.style.display = 'block';
     }
 
     exportAsJSON() {
-        const exportData = {
-            category: this.currentCategory,
-            items: this.items[this.currentCategory],
-            collections: this.collections[this.currentCategory],
-            exportedAt: new Date().toISOString(),
-            app: 'anygood'
-        };
-
+        const exportData = this.storage.exportData();
         const dataStr = JSON.stringify(exportData, null, 2);
         const dataBlob = new Blob([dataStr], { type: 'application/json' });
         const url = URL.createObjectURL(dataBlob);
-
         const link = document.createElement('a');
         link.href = url;
         link.download = `anygood-${this.currentCategory}-${Date.now()}.json`;
@@ -1060,7 +1248,7 @@ class AnygoodApp {
         URL.revokeObjectURL(url);
 
         const output = document.getElementById('share-output');
-        output.innerHTML = '<p style="color: var(--accent-blue); font-size: 0.9em;">✓ Downloaded successfully!</p>';
+        if (output) output.innerHTML = '<p style="color: var(--accent-blue); font-size: 0.9em;">✓ Downloaded successfully!</p>';
     }
 
     generateShareLink() {
@@ -1069,33 +1257,30 @@ class AnygoodApp {
             items: this.items[this.currentCategory],
             collections: this.collections[this.currentCategory]
         };
-
         const encoded = btoa(JSON.stringify(shareData));
         const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
-
         const output = document.getElementById('share-output');
-        output.innerHTML = `
-            <div style="background: var(--bg-primary); padding: 12px; border-radius: var(--radius-sm); margin-top: 12px;">
-                <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 8px;">Share this link:</p>
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" value="${shareUrl}" readonly
-                           style="flex: 1; font-size: 0.8em; padding: 8px;"
-                           id="share-url-input">
-                    <button onclick="app.copyShareLink()" style="padding: 8px 16px; font-size: 0.85em;">
-                        Copy
-                    </button>
+        if (output) {
+            output.innerHTML = `
+                <div style="background: var(--bg-primary); padding: 12px; border-radius: var(--radius-sm); margin-top: 12px;">
+                    <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 8px;">Share this link:</p>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" value="${shareUrl}" readonly style="flex: 1; font-size: 0.8em; padding: 8px;" id="share-url-input">
+                        <button onclick="app.copyShareLink()" style="padding: 8px 16px; font-size: 0.85em;">Copy</button>
+                    </div>
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     copyShareLink() {
         const input = document.getElementById('share-url-input');
-        input.select();
-        document.execCommand('copy');
-
-        const output = document.getElementById('share-output');
-        output.innerHTML += '<p style="color: var(--accent-blue); font-size: 0.9em; margin-top: 8px;">✓ Link copied to clipboard!</p>';
+        if (input) {
+            input.select();
+            document.execCommand('copy');
+            const output = document.getElementById('share-output');
+            if (output) output.innerHTML += '<p style="color: var(--accent-blue); font-size: 0.9em; margin-top: 8px;">✓ Link copied!</p>';
+        }
     }
 
     checkForSharedData() {
@@ -1104,7 +1289,6 @@ class AnygoodApp {
             try {
                 const encoded = hash.substring(7);
                 const decoded = JSON.parse(atob(encoded));
-
                 if (decoded.category && decoded.items) {
                     setTimeout(() => {
                         if (confirm(`Import shared ${decoded.category} list with ${decoded.items.length} items?`)) {
@@ -1115,15 +1299,16 @@ class AnygoodApp {
                 }
             } catch (error) {
                 console.error('Error parsing shared data:', error);
+                this.showNotification('Invalid share link', 'error');
             }
         }
     }
 
     importSharedData(sharedData) {
         const category = sharedData.category;
-
-        // Merge items (avoid duplicates by text)
         const existingTexts = new Set(this.items[category].map(i => i.text));
+        let imported = 0;
+
         sharedData.items.forEach(item => {
             if (!existingTexts.has(item.text)) {
                 this.items[category].push({
@@ -1131,10 +1316,10 @@ class AnygoodApp {
                     id: Date.now() + Math.random(),
                     completed: false
                 });
+                imported++;
             }
         });
 
-        // Merge collections
         if (sharedData.collections && sharedData.collections.length > 0) {
             sharedData.collections.forEach(collection => {
                 this.collections[category].push({
@@ -1145,12 +1330,214 @@ class AnygoodApp {
             });
         }
 
-        this.saveToStorage('items', this.items);
-        this.saveToStorage('collections', this.collections);
+        this.saveState();
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
         this.updateCategoryCounts();
         this.openCategory(category);
+        this.showNotification(`Imported ${imported} items`, 'success');
+    }
 
-        alert(`Successfully imported ${sharedData.items.length} items!`);
+    // Quick Add from Main View
+    async quickAddFromMain() {
+        const input = document.getElementById('quick-add-input');
+        if (!input) return;
+
+        const text = input.value.trim();
+        if (!text) return;
+
+        try {
+            this.showLoading('Processing...');
+            
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            // Determine category
+            let category = parsed.category;
+            if (!category) {
+                // Auto-categorize
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
+            }
+
+            // Ensure category exists
+            if (!this.categories.includes(category)) {
+                // Create category if it doesn't exist
+                this.addCategorySilently(category, parsed.title || text);
+            }
+
+            // Create item
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || text,
+                completed: false
+            };
+
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                // Extract metadata in background
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+
+            // Generate tags
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+
+            // Add to category
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+
+            // Clear input
+            input.value = '';
+            input.focus();
+
+            this.hideLoading();
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Quick add error:', error);
+        }
+    }
+
+    // Category Management
+    showAddCategoryModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        modalBody.innerHTML = `
+            <h2>Create New Category</h2>
+            <input type="text" id="category-name-input" placeholder="Category name..." autofocus>
+            <div style="margin-top: 12px;">
+                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85em;">Icon (emoji):</label>
+                <input type="text" id="category-icon-input" placeholder="📋" maxlength="2" style="font-size: 24px; text-align: center;">
+            </div>
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <button onclick="app.addCategory()">Create</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+
+        const nameInput = document.getElementById('category-name-input');
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addCategory();
+        });
+    }
+
+    addCategory() {
+        const nameInput = document.getElementById('category-name-input');
+        const iconInput = document.getElementById('category-icon-input');
+        
+        const name = nameInput.value.trim();
+        const icon = iconInput.value.trim() || '📋';
+
+        if (!name) {
+            this.showNotification('Please enter a category name', 'error');
+            return;
+        }
+
+        // Create slug from name
+        const slug = name.toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+        if (this.categories.includes(slug)) {
+            this.showNotification('Category already exists', 'error');
+            return;
+        }
+
+        // Add category
+        this.categories.push(slug);
+        this.categoryMetadata[slug] = { icon: icon, name: name };
+        this.items[slug] = [];
+        this.collections[slug] = [];
+        this.completedItemsExpanded[slug] = false;
+
+        this.saveState();
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+
+        this.renderOverview();
+        this.closeModal();
+        this.showNotification(`Category "${name}" created`, 'success');
+    }
+
+    addCategorySilently(slug, name) {
+        if (this.categories.includes(slug)) return;
+
+        this.categories.push(slug);
+        this.categoryMetadata[slug] = { 
+            icon: this.getCategoryIcon(slug), 
+            name: name || slug.charAt(0).toUpperCase() + slug.slice(1)
+        };
+        this.items[slug] = [];
+        this.collections[slug] = [];
+        this.completedItemsExpanded[slug] = false;
+
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+    }
+
+    getCategoryIcon(slug) {
+        // Try to infer icon from category name
+        const iconMap = {
+            'read': '📚', 'listen': '🎵', 'watch': '📺', 'eat': '🍽️', 'do': '✨',
+            'book': '📚', 'music': '🎵', 'movie': '📺', 'food': '🍽️', 'activity': '✨',
+            'travel': '✈️', 'shop': '🛍️', 'learn': '📖', 'exercise': '💪', 'play': '🎮'
+        };
+        return iconMap[slug] || '📋';
+    }
+
+    deleteCategory(categorySlug) {
+        // Don't allow deleting default categories
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        if (defaultCategories.includes(categorySlug)) {
+            this.showNotification('Cannot delete default categories', 'error');
+            return;
+        }
+
+        if (!confirm(`Delete category "${this.categoryMetadata[categorySlug]?.name || categorySlug}" and all its items?`)) {
+            return;
+        }
+
+        // Remove category
+        this.categories = this.categories.filter(cat => cat !== categorySlug);
+        delete this.categoryMetadata[categorySlug];
+        delete this.items[categorySlug];
+        delete this.collections[categorySlug];
+        delete this.completedItemsExpanded[categorySlug];
+
+        // If currently viewing this category, go back
+        if (this.currentCategory === categorySlug) {
+            this.closeCategory();
+        }
+
+        this.saveState();
+        this.storage.save('categories', this.categories);
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.storage.save('items', this.items);
+        this.storage.save('collections', this.collections);
+
+        this.renderOverview();
+        this.showNotification('Category deleted', 'success');
+    }
+
+    toggleCompletedItems() {
+        if (!this.currentCategory) return;
+        this.completedItemsExpanded[this.currentCategory] = !this.completedItemsExpanded[this.currentCategory];
+        this.renderDetailItems();
     }
 
     // Utilities
@@ -1159,19 +1546,12 @@ class AnygoodApp {
     }
 
     escapeHtml(text) {
+        if (!text) return '';
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }
-
-    saveToStorage(key, data) {
-        localStorage.setItem(`anygood_${key}`, JSON.stringify(data));
-    }
-
-    loadFromStorage(key) {
-        const data = localStorage.getItem(`anygood_${key}`);
-        return data ? JSON.parse(data) : null;
-    }
 }
 
+// Initialize app
 const app = new AnygoodApp();
