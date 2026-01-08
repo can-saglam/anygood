@@ -67,6 +67,9 @@ class AnygoodApp {
         // Populate placeholder data if first run
         if (this.isFirstRun()) {
             this.populatePlaceholderData();
+            // Save placeholder data immediately
+            this.storage.save('items', this.items);
+            this.storage.save('collections', this.collections);
         }
 
         // Save initial state for undo
@@ -76,8 +79,13 @@ class AnygoodApp {
     }
 
     isFirstRun() {
-        return Object.values(this.items).every(arr => arr.length === 0) &&
-               Object.values(this.collections).every(arr => arr.length === 0);
+        // Check if items are empty or don't exist
+        const itemsEmpty = Object.keys(this.items).length === 0 || 
+                          Object.values(this.items).every(arr => !arr || arr.length === 0);
+        // Check if collections are empty or don't exist
+        const collectionsEmpty = Object.keys(this.collections).length === 0 || 
+                                Object.values(this.collections).every(arr => !arr || arr.length === 0);
+        return itemsEmpty && collectionsEmpty;
     }
 
     populatePlaceholderData() {
@@ -277,18 +285,94 @@ class AnygoodApp {
         this.collections.read = [
             {
                 id: Date.now() - 6000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 3600000, // 1 hour ago
+                sourceUrl: 'https://www.lrb.co.uk/feed',
+                items: [
+                    {
+                        id: Date.now() - 6001,
+                        text: 'The Uses of Disenchantment',
+                        description: 'A review of recent works on the history of magic and the supernatural in early modern Europe',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n01',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 3600000,
+                        pubDate: new Date(Date.now() - 3600000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6002,
+                        text: 'On Not Being Able to Read',
+                        description: 'An essay on the changing nature of reading in the digital age and what we lose when we skim',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n02',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 7200000,
+                        pubDate: new Date(Date.now() - 7200000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6003,
+                        text: 'The Quietus Book Review: The New Nature Writing',
+                        description: 'Exploring how contemporary writers are reimagining our relationship with the natural world',
+                        link: 'https://thequietus.com/articles/book-review-nature-writing',
+                        source: 'The Quietus - Books',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 10800000,
+                        pubDate: new Date(Date.now() - 10800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6004,
+                        text: 'London Review of Books: The Art of Translation',
+                        description: 'A deep dive into the challenges and rewards of literary translation, featuring interviews with leading translators',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n03',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 14400000,
+                        pubDate: new Date(Date.now() - 14400000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6005,
+                        text: 'The Quietus: Independent Bookshops in London',
+                        description: 'A guide to the best independent bookshops across London, from Hackney to Hampstead',
+                        link: 'https://thequietus.com/articles/london-bookshops-guide',
+                        source: 'The Quietus - Books',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 18000000,
+                        pubDate: new Date(Date.now() - 18000000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6006,
+                        text: 'LRB: The Future of the Novel',
+                        description: 'Leading authors discuss how the novel is evolving in response to new technologies and changing reader habits',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n04',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 21600000,
+                        pubDate: new Date(Date.now() - 21600000).toISOString(),
+                        completed: false
+                    }
+                ]
+            },
+            {
+                id: Date.now() - 6007,
                 name: 'London Literature',
                 curated: true,
                 items: [
                     {
-                        id: Date.now() - 6001,
+                        id: Date.now() - 6008,
                         text: 'White Teeth',
                         description: 'Zadie Smith - Multi-generational saga of three London families',
                         link: 'https://www.goodreads.com/book/show/3711.White_Teeth',
                         completed: false
                     },
                     {
-                        id: Date.now() - 6002,
+                        id: Date.now() - 6009,
                         text: 'NW',
                         description: 'Zadie Smith - Four Londoners reconnect in northwest London',
                         link: 'https://www.goodreads.com/book/show/13486385-nw',
@@ -301,11 +385,178 @@ class AnygoodApp {
         this.collections.listen = [
             {
                 id: Date.now() - 7000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 1800000, // 30 minutes ago
+                sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                items: [
+                    {
+                        id: Date.now() - 7001,
+                        text: 'Pitchfork: Overmono - Good Lies (9.0)',
+                        description: 'The UK electronic duo deliver a masterful debut album that blends garage, breaks, and ambient textures into something entirely new',
+                        link: 'https://pitchfork.com/reviews/albums/overmono-good-lies/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 1800000,
+                        pubDate: new Date(Date.now() - 1800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7002,
+                        text: 'The Quietus: Floating Points Live at Printworks',
+                        description: 'A review of the electronic producer\'s stunning live performance, blending jazz, classical, and club music',
+                        link: 'https://thequietus.com/articles/floating-points-printworks-review',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 5400000,
+                        pubDate: new Date(Date.now() - 5400000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7003,
+                        text: 'Pitchfork: Black Country, New Road - Ants From Up There (9.2)',
+                        description: 'The London septet\'s sophomore album is a sprawling, emotionally devastating masterpiece that defies categorization',
+                        link: 'https://pitchfork.com/reviews/albums/black-country-new-road-ants-from-up-there/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 9000000,
+                        pubDate: new Date(Date.now() - 9000000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7004,
+                        text: 'The Quietus: NTS Radio\'s Best Shows of the Month',
+                        description: 'A curated selection of the finest radio shows from NTS, featuring everything from ambient to techno',
+                        link: 'https://thequietus.com/articles/nts-radio-best-shows-month',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 12600000,
+                        pubDate: new Date(Date.now() - 12600000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7005,
+                        text: 'Pitchfork: Fred again.. - actual life 3 (8.5)',
+                        description: 'The producer\'s third installment of his diary series continues to blur the lines between found sounds and club music',
+                        link: 'https://pitchfork.com/reviews/albums/fred-again-actual-life-3/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 16200000,
+                        pubDate: new Date(Date.now() - 16200000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7006,
+                        text: 'The Quietus: The Lot Radio - 24/7 Independent Broadcasting',
+                        description: 'A feature on the Brooklyn-based online radio station that has become a hub for underground electronic music',
+                        link: 'https://thequietus.com/articles/lot-radio-feature',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 19800000,
+                        pubDate: new Date(Date.now() - 19800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7007,
+                        text: 'Pitchfork: Essential UK Garage Classics',
+                        description: 'A guide to the foundational tracks of UK garage, from its origins in the 90s to its modern revival',
+                        link: 'https://pitchfork.com/features/lists/uk-garage-classics/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 23400000,
+                        pubDate: new Date(Date.now() - 23400000).toISOString(),
+                        completed: false
+                    }
+                ]
+            },
+            {
+                id: Date.now() - 7008,
                 name: 'Essential UK Dance',
                 curated: true,
                 items: [
-                    { id: Date.now() - 7001, text: 'Overmono - Good Lies', completed: false },
-                    { id: Date.now() - 7002, text: 'Fred again.. - actual life', completed: false }
+                    { id: Date.now() - 7009, text: 'Overmono - Good Lies', completed: false },
+                    { id: Date.now() - 7010, text: 'Fred again.. - actual life', completed: false }
+                ]
+            }
+        ];
+
+        // Add watch digest collection
+        this.collections.watch = [
+            {
+                id: Date.now() - 8000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 2700000, // 45 minutes ago
+                sourceUrl: 'https://lwlies.com/feed/',
+                items: [
+                    {
+                        id: Date.now() - 8001,
+                        text: 'Little White Lies: Past Lives Review',
+                        description: 'Celine Song\'s quietly devastating debut about two childhood friends reconnecting after decades apart',
+                        link: 'https://lwlies.com/films/past-lives-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 2700000,
+                        pubDate: new Date(Date.now() - 2700000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8002,
+                        text: 'Little White Lies: The Bear Season 3 - TV Review',
+                        description: 'The Chicago restaurant drama continues its Michelin-star ambitions with another season of high-stakes kitchen drama',
+                        link: 'https://lwlies.com/tv/the-bear-season-3-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 6300000,
+                        pubDate: new Date(Date.now() - 6300000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8003,
+                        text: 'Little White Lies: Aftersun - Film of the Year',
+                        description: 'Charlotte Wells\' stunning debut about a daughter\'s fragmented memories of a Turkish holiday with her father',
+                        link: 'https://lwlies.com/films/aftersun-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 9900000,
+                        pubDate: new Date(Date.now() - 9900000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8004,
+                        text: 'Little White Lies: Anatomy of a Fall - Palme d\'Or Winner',
+                        description: 'Justine Triet\'s courtroom drama dissects a marriage through the lens of a murder investigation',
+                        link: 'https://lwlies.com/films/anatomy-of-a-fall-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 13500000,
+                        pubDate: new Date(Date.now() - 13500000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8005,
+                        text: 'Little White Lies: How To with John Wilson - Documentary Series',
+                        description: 'An anxious New Yorker documents life\'s absurdities in this hilarious and poignant HBO series',
+                        link: 'https://lwlies.com/tv/how-to-with-john-wilson-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 17100000,
+                        pubDate: new Date(Date.now() - 17100000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8006,
+                        text: 'Little White Lies: Best Films of 2024 So Far',
+                        description: 'A mid-year roundup of the finest cinema releases, from festival favorites to mainstream hits',
+                        link: 'https://lwlies.com/features/best-films-2024/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 20700000,
+                        pubDate: new Date(Date.now() - 20700000).toISOString(),
+                        completed: false
+                    }
                 ]
             }
         ];
@@ -322,9 +573,43 @@ class AnygoodApp {
         this.setupQuickAdd();
         this.setupClipboardMonitoring();
         this.setupElectronIPC();
+        this.setupCategoryClicks();
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
+    }
+
+    setupCategoryClicks() {
+        // Use event delegation to handle category card clicks
+        const grid = document.getElementById('category-grid');
+        if (grid) {
+            grid.addEventListener('click', (e) => {
+                const card = e.target.closest('.category-card');
+                if (card && !e.target.closest('.category-delete-btn')) {
+                    const category = card.getAttribute('data-category');
+                    if (category) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.openCategory(category);
+                    }
+                }
+            });
+
+            // Add keyboard support
+            grid.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    const card = e.target.closest('.category-card');
+                    if (card && !e.target.closest('.category-delete-btn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const category = card.getAttribute('data-category');
+                        if (category) {
+                            this.openCategory(category);
+                        }
+                    }
+                }
+            });
+        }
     }
 
     setupElectronIPC() {
@@ -760,7 +1045,7 @@ class AnygoodApp {
             card.setAttribute('role', 'button');
             card.setAttribute('tabindex', '0');
             card.setAttribute('aria-label', `${metadata.name} category`);
-            card.onclick = () => this.openCategory(category);
+            // Note: Click handling is done via event delegation in setupCategoryClicks()
             
             card.innerHTML = `
                 <div class="category-icon" aria-hidden="true">${metadata.icon}</div>
@@ -907,41 +1192,66 @@ class AnygoodApp {
             return;
         }
 
-        collectionsElement.innerHTML = collections.map((collection, collectionIndex) => `
-            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
+        // Separate digest collections from regular collections
+        const digestCollections = collections.filter(c => c.digest);
+        const regularCollections = collections.filter(c => !c.digest);
+
+        // Sort digest collections by last updated (newest first)
+        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+
+        // Combine: digest first, then regular
+        const sortedCollections = [...digestCollections, ...regularCollections];
+
+        collectionsElement.innerHTML = sortedCollections.map((collection, collectionIndex) => {
+            const actualIndex = collections.indexOf(collection);
+            const isDigest = collection.digest;
+            const lastUpdated = collection.lastUpdated ? this.rssParser.formatRelativeTime(new Date(collection.lastUpdated).toISOString()) : null;
+            
+            return `
+            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'} ${isDigest ? 'digest' : ''}" data-collection-id="${collection.id}">
                 <div class="collection-header">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})" aria-label="Toggle collection">▸</button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                        <button class="collection-toggle" onclick="app.toggleCollection(${actualIndex})" aria-label="Toggle collection">▸</button>
                         <span class="collection-name">
+                            ${isDigest ? '<span class="badge-digest">📰</span>' : ''}
                             ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
+                            ${isDigest ? '<span class="badge-live">LIVE</span>' : ''}
                         </span>
+                        ${lastUpdated ? `<span class="collection-updated">Updated ${lastUpdated}</span>` : ''}
                     </div>
                     <div class="collection-actions">
                         <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
-                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
+                        ${isDigest ? `<button class="refresh-btn" onclick="app.refreshDigest(${actualIndex})" title="Refresh feed" aria-label="Refresh feed">↻</button>` : ''}
+                        <button onclick="app.deleteCollection(${actualIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
                     </div>
                 </div>
                 <div class="collection-items">
                     ${collection.items.length === 0 ?
                         '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
                         collection.items.map((item, itemIndex) => {
-                            const hasMetadata = item.description || item.link;
+                            const hasMetadata = item.description || item.link || item.pubDate || item.source;
+                            const itemDate = item.pubDate ? this.rssParser.formatRelativeTime(item.pubDate) : null;
+                            
                             return `
                                 <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
                                     <div class="collection-item-content">
                                         <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
                                         ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
-                                        ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                            </svg>
-                                            ${this.escapeHtml(new URL(item.link).hostname)}
-                                        </a>` : ''}
+                                        <div class="collection-item-meta">
+                                            ${item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
+                                            ${itemDate ? `<span class="item-date">${itemDate}</span>` : ''}
+                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                                </svg>
+                                                ${this.escapeHtml(new URL(item.link).hostname)}
+                                            </a>` : ''}
+                                        </div>
                                     </div>
                                     <div class="collection-item-actions">
-                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})">Add</button>
-                                        <button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>
+                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
+                                        <button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>
                                     </div>
                                 </div>
                             `;
@@ -949,7 +1259,8 @@ class AnygoodApp {
                     }
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // Items - Enhanced with AI and metadata
@@ -1311,21 +1622,51 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: name,
-                    items: items.map(text => ({
+                // Check if "Anygood Digest" collection exists for this category
+                let digestCollection = this.collections[this.currentCategory].find(
+                    c => c.name === 'Anygood Digest'
+                );
+
+                if (!digestCollection) {
+                    // Create new "Anygood Digest" collection
+                    digestCollection = {
+                        id: Date.now(),
+                        name: 'Anygood Digest',
+                        items: [],
+                        expanded: true,
+                        digest: true,
+                        lastUpdated: Date.now()
+                    };
+                    this.collections[this.currentCategory].push(digestCollection);
+                }
+
+                // Add items with full metadata
+                const newItems = items.map(item => {
+                    const itemObj = {
                         id: Date.now() + Math.random(),
-                        text: text,
-                        completed: false
-                    })),
-                    expanded: true
+                        text: item.title || item,
+                        completed: false,
+                        source: name,
+                        sourceUrl: url,
+                        importedAt: Date.now()
+                    };
+                    
+                    if (item.description) itemObj.description = item.description;
+                    if (item.link) itemObj.link = item.link;
+                    if (item.pubDate) itemObj.pubDate = item.pubDate;
+                    
+                    return itemObj;
                 });
+
+                // Add to digest collection
+                digestCollection.items.push(...newItems);
+                digestCollection.lastUpdated = Date.now();
+
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items`, 'success');
+                this.showNotification(`Imported ${items.length} items to Anygood Digest`, 'success');
             } else {
                 this.hideLoading();
                 this.showNotification(`Could not fetch items from ${name}`, 'error');
@@ -1347,9 +1688,11 @@ class AnygoodApp {
         try {
             this.showLoading('Processing import...');
             let items = [];
+            let isRSSFeed = false;
 
             if (input.startsWith('http://') || input.startsWith('https://')) {
                 items = await this.rssParser.parseURL(input);
+                isRSSFeed = true;
             } else {
                 items = input.split('\n')
                     .map(line => line.trim())
@@ -1360,21 +1703,62 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: collectionName,
-                    items: items.map(text => ({
-                        id: Date.now() + Math.random(),
-                        text: text,
-                        completed: false
-                    })),
-                    expanded: true
-                });
+                if (isRSSFeed) {
+                    // For RSS feeds, add to "Anygood Digest"
+                    let digestCollection = this.collections[this.currentCategory].find(
+                        c => c.name === 'Anygood Digest'
+                    );
+
+                    if (!digestCollection) {
+                        digestCollection = {
+                            id: Date.now(),
+                            name: 'Anygood Digest',
+                            items: [],
+                            expanded: true,
+                            digest: true,
+                            lastUpdated: Date.now()
+                        };
+                        this.collections[this.currentCategory].push(digestCollection);
+                    }
+
+                    const newItems = items.map(item => {
+                        const itemObj = {
+                            id: Date.now() + Math.random(),
+                            text: item.title || item,
+                            completed: false,
+                            source: collectionName,
+                            sourceUrl: input,
+                            importedAt: Date.now()
+                        };
+                        
+                        if (item.description) itemObj.description = item.description;
+                        if (item.link) itemObj.link = item.link;
+                        if (item.pubDate) itemObj.pubDate = item.pubDate;
+                        
+                        return itemObj;
+                    });
+
+                    digestCollection.items.push(...newItems);
+                    digestCollection.lastUpdated = Date.now();
+                } else {
+                    // For plain text lists, create regular collection
+                    this.collections[this.currentCategory].push({
+                        id: Date.now(),
+                        name: collectionName,
+                        items: items.map(text => ({
+                            id: Date.now() + Math.random(),
+                            text: text,
+                            completed: false
+                        })),
+                        expanded: true
+                    });
+                }
+                
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items`, 'success');
+                this.showNotification(`Imported ${items.length} items${isRSSFeed ? ' to Anygood Digest' : ''}`, 'success');
             } else {
                 this.showNotification('Could not parse any items', 'error');
             }
@@ -1778,6 +2162,66 @@ class AnygoodApp {
         if (!this.currentCategory) return;
         this.completedItemsExpanded[this.currentCategory] = !this.completedItemsExpanded[this.currentCategory];
         this.renderDetailItems();
+    }
+
+    async refreshDigest(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (!collection || !collection.digest) return;
+
+        // Find the source URL from the first item
+        const firstItem = collection.items.find(item => item.sourceUrl);
+        if (!firstItem || !firstItem.sourceUrl) {
+            this.showNotification('Cannot refresh: no source URL found', 'error');
+            return;
+        }
+
+        const sourceName = firstItem.source || 'feed';
+        
+        try {
+            this.showLoading(`Refreshing ${sourceName}...`);
+            const items = await this.rssParser.parseURL(firstItem.sourceUrl);
+            this.hideLoading();
+
+            if (items.length > 0) {
+                // Add new items (avoid duplicates by checking text)
+                const existingTexts = new Set(collection.items.map(i => i.text));
+                const newItems = items
+                    .filter(item => !existingTexts.has(item.title || item))
+                    .map(item => {
+                        const itemObj = {
+                            id: Date.now() + Math.random(),
+                            text: item.title || item,
+                            completed: false,
+                            source: sourceName,
+                            sourceUrl: firstItem.sourceUrl,
+                            importedAt: Date.now()
+                        };
+                        
+                        if (item.description) itemObj.description = item.description;
+                        if (item.link) itemObj.link = item.link;
+                        if (item.pubDate) itemObj.pubDate = item.pubDate;
+                        
+                        return itemObj;
+                    });
+
+                if (newItems.length > 0) {
+                    collection.items.unshift(...newItems); // Add new items at the top
+                    collection.lastUpdated = Date.now();
+                    this.saveState();
+                    this.storage.save('collections', this.collections);
+                    this.renderDetail();
+                    this.showNotification(`Added ${newItems.length} new items`, 'success');
+                } else {
+                    this.showNotification('No new items found', 'info');
+                }
+            } else {
+                this.hideLoading();
+                this.showNotification('Could not fetch items', 'error');
+            }
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Refresh failed: ${error.message}`, 'error');
+        }
     }
 
     // Utilities
