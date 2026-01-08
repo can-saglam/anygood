@@ -24,12 +24,10 @@ class AnygoodApp {
         this.items = this.storage.load('items') || {};
         this.collections = this.storage.load('collections') || {};
         this.currentCategory = null;
-        this.searchQuery = '';
         this.selectedItems = new Set();
         this.bulkMode = false;
         this.pendingToggle = null;
         this.isLoading = false;
-        this.searchDebounceTimer = null;
         this.completedItemsExpanded = {}; // Track which categories have completed items expanded
 
         // Initialize categories
@@ -359,12 +357,6 @@ class AnygoodApp {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-            // Cmd/Ctrl + K: Search
-            if (cmdOrCtrl && e.key === 'k') {
-                e.preventDefault();
-                this.focusSearch();
-            }
-
             // Cmd/Ctrl + N: New item
             if (cmdOrCtrl && e.key === 'n' && this.currentCategory) {
                 e.preventDefault();
@@ -407,17 +399,7 @@ class AnygoodApp {
     }
 
     setupSearch() {
-        // Search will be handled in renderDetail
-    }
-
-    focusSearch() {
-        if (this.currentCategory) {
-            const searchInput = document.getElementById('search-input');
-            if (searchInput) {
-                searchInput.focus();
-                searchInput.select();
-            }
-        }
+        // Search functionality removed from detail view
     }
 
     // State management
@@ -492,7 +474,6 @@ class AnygoodApp {
     // Navigation
     openCategory(category) {
         this.currentCategory = category;
-        this.searchQuery = '';
         this.selectedItems.clear();
         this.bulkMode = false;
         document.getElementById('overview-screen').classList.remove('active');
@@ -502,7 +483,6 @@ class AnygoodApp {
 
     closeCategory() {
         this.currentCategory = null;
-        this.searchQuery = '';
         this.selectedItems.clear();
         this.bulkMode = false;
         document.getElementById('detail-screen').classList.remove('active');
@@ -573,21 +553,12 @@ class AnygoodApp {
         const listElement = document.getElementById('detail-items-list');
         if (!listElement) return;
 
-        let items = this.items[this.currentCategory] || [];
-
-        // Apply search filter
-        if (this.searchQuery) {
-            this.searchEngine.buildIndex(items);
-            const results = this.searchEngine.search(this.searchQuery, items);
-            items = results.map(r => r.item);
-        }
+        const items = this.items[this.currentCategory] || [];
 
         if (items.length === 0) {
             listElement.innerHTML = `
                 <div class="empty-state">
-                    ${this.searchQuery ? 
-                        `No items match "${this.searchQuery}"` : 
-                        'No items yet. Tap + to add one.'}
+                    No items yet. Tap + to add one.
                 </div>
             `;
             return;
@@ -598,21 +569,6 @@ class AnygoodApp {
         const completedItems = items.filter(item => item.completed);
 
         let html = '';
-
-        // Search bar (always visible)
-        html += `
-            <div class="search-container">
-                <input type="text" id="search-input" 
-                       placeholder="Search items... (Cmd+K)" 
-                       value="${this.escapeHtml(this.searchQuery)}"
-                       oninput="app.handleSearch(event)">
-                <button class="bulk-mode-btn" onclick="app.toggleBulkMode()" 
-                        title="Bulk select mode (${this.bulkMode ? 'on' : 'off'})"
-                        aria-label="Toggle bulk select mode">
-                    ${this.bulkMode ? '✓' : '☐'}
-                </button>
-            </div>
-        `;
 
         // Active items
         if (activeItems.length > 0) {
@@ -696,26 +652,9 @@ class AnygoodApp {
         }
 
         listElement.innerHTML = html;
-
-        // Re-attach search input handler if it exists
-        const searchInput = document.getElementById('search-input');
-        if (searchInput && !searchInput.oninput) {
-            searchInput.addEventListener('input', (e) => this.handleSearch(e));
-        }
     }
 
-    handleSearch(event) {
-        this.searchQuery = event.target.value;
-        
-        // Debounce search for performance
-        if (this.searchDebounceTimer) {
-            clearTimeout(this.searchDebounceTimer);
-        }
-        
-        this.searchDebounceTimer = setTimeout(() => {
-            this.renderDetailItems();
-        }, 300);
-    }
+    // Search functionality removed from detail view
 
     renderDetailCollections() {
         const collectionsElement = document.getElementById('detail-collections');
@@ -1458,14 +1397,7 @@ class AnygoodApp {
             input.focus();
 
             this.hideLoading();
-            this.showNotification(`Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
-
-            // Optionally open the category
-            setTimeout(() => {
-                if (confirm(`Item added! Open ${this.categoryMetadata[category]?.name || category}?`)) {
-                    this.openCategory(category);
-                }
-            }, 500);
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
 
         } catch (error) {
             this.hideLoading();
