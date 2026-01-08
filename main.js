@@ -16,7 +16,9 @@ const mb = menubar({
       contextIsolation: true,
       enableRemoteModule: false,
       // Allow localStorage to work
-      partition: 'persist:anygood'
+      partition: 'persist:anygood',
+      // Enable clipboard access
+      clipboard: true
     },
     // Make it look more native
     transparent: false,
@@ -32,9 +34,31 @@ const mb = menubar({
 mb.on('ready', () => {
   console.log('anygood is ready in menu bar');
 
+  // Global keyboard shortcut: Cmd+A to open Anygood
+  const { globalShortcut } = require('electron');
+  globalShortcut.register('CommandOrControl+A', () => {
+    mb.showWindow();
+    if (mb.window) {
+      mb.window.focus();
+    }
+  });
+
   // Optional: Add a context menu for right-click
   const { Menu, globalShortcut } = require('electron');
   const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Anygood',
+      accelerator: 'CommandOrControl+A',
+      click: () => {
+        mb.showWindow();
+        if (mb.window) {
+          mb.window.focus();
+        }
+      }
+    },
+    {
+      type: 'separator'
+    },
     {
       label: 'Refresh',
       click: () => {
@@ -62,6 +86,12 @@ mb.on('ready', () => {
       mb.showWindow();
     }
   });
+});
+
+// Unregister shortcuts on app quit
+mb.app.on('will-quit', () => {
+  const { globalShortcut } = require('electron');
+  globalShortcut.unregisterAll();
 });
 
 // Unregister shortcuts on app quit
