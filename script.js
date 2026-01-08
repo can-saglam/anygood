@@ -321,9 +321,37 @@ class AnygoodApp {
         this.setupSearch();
         this.setupQuickAdd();
         this.setupClipboardMonitoring();
+        this.setupElectronIPC();
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
+    }
+
+    setupElectronIPC() {
+        // Listen for focus events from Electron
+        if (window.electronAPI) {
+            window.electronAPI.onFocusQuickAdd(() => {
+                this.focusQuickAddInput();
+            });
+        }
+        
+        // Also focus when window becomes visible (for browser compatibility)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !this.currentCategory) {
+                setTimeout(() => this.focusQuickAddInput(), 100);
+            }
+        });
+    }
+
+    focusQuickAddInput() {
+        // Only focus if we're on the main view
+        if (!this.currentCategory) {
+            const input = document.getElementById('quick-add-input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }
     }
 
     setupQuickAdd() {
