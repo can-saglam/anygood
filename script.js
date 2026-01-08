@@ -667,23 +667,49 @@ class AnygoodApp {
         // Toggle the completion state
         item.completed = !item.completed;
 
-        // Immediate visual update
+        // Immediate visual update (shows checked/unchecked but stays in place)
         this.saveToStorage('items', this.items);
         this.renderDetail();
 
-        // Move to appropriate section after 2 second delay
+        // Move to appropriate section after 2 second delay with animation
         this.pendingToggle = setTimeout(() => {
-            // Find the item by id (safer than using index which may have changed)
+            // Find the item by id
             const currentIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
 
             if (currentIndex !== -1) {
-                // Remove item from current position
-                const movedItem = this.items[this.currentCategory].splice(currentIndex, 1)[0];
-                // Add to end of list
-                this.items[this.currentCategory].push(movedItem);
+                // Add moving-out animation class
+                const itemElements = document.querySelectorAll('.item');
+                itemElements.forEach((el) => {
+                    const checkbox = el.querySelector('.item-checkbox');
+                    if (checkbox && checkbox.getAttribute('onclick').includes(currentIndex)) {
+                        el.classList.add('moving-out');
+                    }
+                });
 
-                this.saveToStorage('items', this.items);
-                this.renderDetail();
+                // Wait for animation to complete, then move the item
+                setTimeout(() => {
+                    // Remove item from current position
+                    const movedItem = this.items[this.currentCategory].splice(currentIndex, 1)[0];
+                    // Add to end of list
+                    this.items[this.currentCategory].push(movedItem);
+
+                    this.saveToStorage('items', this.items);
+
+                    // Re-render and add moving-in animation to the new position
+                    this.renderDetail();
+
+                    // Find and animate the newly positioned item
+                    setTimeout(() => {
+                        const allItems = document.querySelectorAll('.item');
+                        const newIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
+                        allItems.forEach((el) => {
+                            const checkbox = el.querySelector('.item-checkbox');
+                            if (checkbox && checkbox.getAttribute('onclick').includes(newIndex)) {
+                                el.classList.add('moving-in');
+                            }
+                        });
+                    }, 50);
+                }, 400); // Match the slideOut animation duration
             }
 
             this.pendingToggle = null;
