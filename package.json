@@ -1,7 +1,7 @@
 {
   "name": "anygood",
-  "version": "2.0.0",
-  "description": "A curated todo app for East London creatives with AI features, search, dark mode, and more",
+  "version": "1.0.0",
+  "description": "A curated todo app for East London creatives",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
