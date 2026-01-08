@@ -1,0 +1,802 @@
+class AnygoodApp {
+    constructor() {
+        this.categories = ['read', 'listen', 'watch', 'eat', 'do'];
+        this.items = this.loadFromStorage('items') || {};
+        this.collections = this.loadFromStorage('collections') || {};
+
+        this.categories.forEach(cat => {
+            if (!this.items[cat]) this.items[cat] = [];
+            if (!this.collections[cat]) this.collections[cat] = [];
+        });
+
+        // Populate with placeholder data if empty
+        if (this.isFirstRun()) {
+            this.populatePlaceholderData();
+        }
+
+        this.currentCategory = null;
+
+        this.init();
+    }
+
+    isFirstRun() {
+        return Object.values(this.items).every(arr => arr.length === 0) &&
+               Object.values(this.collections).every(arr => arr.length === 0);
+    }
+
+    populatePlaceholderData() {
+        // READ items
+        this.items.read = [
+            {
+                id: Date.now() - 1000,
+                text: 'Tomorrow, and Tomorrow, and Tomorrow',
+                description: 'Gabrielle Zevin - A novel about two friends and the video game they create',
+                link: 'https://www.goodreads.com/book/show/58784475',
+                completed: false
+            },
+            { id: Date.now() - 999, text: 'The Creative Act - Rick Rubin', completed: true },
+            { id: Date.now() - 998, text: 'Raven Leilani - Luster', completed: false },
+            { id: Date.now() - 997, text: 'How to Do Nothing - Jenny Odell', completed: false },
+            { id: Date.now() - 996, text: 'Brick Lane - Monica Ali', completed: true }
+        ];
+
+        // LISTEN items
+        this.items.listen = [
+            { id: Date.now() - 2000, text: 'The Lot Radio - live stream', completed: false },
+            { id: Date.now() - 1999, text: 'Overmono - Good Lies (album)', completed: true },
+            { id: Date.now() - 1998, text: 'NTS Radio - Floating Points mix', completed: false },
+            { id: Date.now() - 1997, text: 'Black Country, New Road - Ants From Up There', completed: false },
+            { id: Date.now() - 1996, text: 'Fred again.. - actual life 3', completed: true }
+        ];
+
+        // WATCH items
+        this.items.watch = [
+            { id: Date.now() - 3000, text: 'Past Lives', completed: false },
+            { id: Date.now() - 2999, text: 'The Bear S3', completed: false },
+            { id: Date.now() - 2998, text: 'Aftersun', completed: true },
+            { id: Date.now() - 2997, text: 'Anatomy of a Fall', completed: false },
+            { id: Date.now() - 2996, text: 'How To with John Wilson', completed: true }
+        ];
+
+        // EAT items
+        this.items.eat = [
+            { id: Date.now() - 4000, text: 'Brat x Supper Club at Netil Market', completed: false },
+            { id: Date.now() - 3999, text: 'Mangal 2 - charcoal grill', completed: true },
+            { id: Date.now() - 3998, text: 'Lyle\'s - tasting menu', completed: false },
+            { id: Date.now() - 3997, text: 'St. JOHN Bread and Wine - bone marrow', completed: false },
+            { id: Date.now() - 3996, text: 'Bright - natural wine bar', completed: false },
+            { id: Date.now() - 3995, text: 'E5 Bakehouse sourdough', completed: true },
+            { id: Date.now() - 3994, text: 'Smoking Goat - Thai BBQ', completed: false }
+        ];
+
+        // DO items
+        this.items.do = [
+            { id: Date.now() - 5000, text: 'Morning swim at London Fields Lido', completed: true },
+            {
+                id: Date.now() - 4999,
+                text: 'Ise-ji: Walk With Me',
+                description: 'Notes on a coastal pilgrimage in rural Tokyo, Japan',
+                link: 'https://walkkumano.com',
+                completed: false
+            },
+            { id: Date.now() - 4998, text: 'Sunday roast at The Marksman', completed: false },
+            { id: Date.now() - 4997, text: 'Open studio weekend in Hackney Wick', completed: false },
+            { id: Date.now() - 4996, text: 'Night ride to Epping Forest', completed: false },
+            { id: Date.now() - 4995, text: 'Sauna session at Ironmonger Row', completed: true }
+        ];
+
+        // READ collections
+        this.collections.read = [
+            {
+                id: Date.now() - 6000,
+                name: 'London Literature',
+                curated: true,
+                items: [
+                    {
+                        id: Date.now() - 6001,
+                        text: 'White Teeth',
+                        description: 'Zadie Smith - Multi-generational saga of three London families',
+                        link: 'https://www.goodreads.com/book/show/3711.White_Teeth',
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6002,
+                        text: 'NW',
+                        description: 'Zadie Smith - Four Londoners reconnect in northwest London',
+                        link: 'https://www.goodreads.com/book/show/13486385-nw',
+                        completed: false
+                    },
+                    { id: Date.now() - 6003, text: 'Brick Lane - Monica Ali', completed: false }
+                ]
+            },
+            {
+                id: Date.now() - 6010,
+                name: 'Creative Inspo',
+                curated: true,
+                items: [
+                    { id: Date.now() - 6011, text: 'The Creative Act - Rick Rubin', completed: false },
+                    { id: Date.now() - 6012, text: 'How to Do Nothing - Jenny Odell', completed: false },
+                    { id: Date.now() - 6013, text: 'Ways of Seeing - John Berger', completed: false }
+                ]
+            }
+        ];
+
+        // LISTEN collections
+        this.collections.listen = [
+            {
+                id: Date.now() - 7000,
+                name: 'Essential UK Dance',
+                curated: true,
+                items: [
+                    { id: Date.now() - 7001, text: 'Overmono - Good Lies', completed: false },
+                    { id: Date.now() - 7002, text: 'Fred again.. - actual life', completed: false },
+                    { id: Date.now() - 7003, text: 'Joy Orbison - Still Slipping Vol. 1', completed: false },
+                    { id: Date.now() - 7004, text: 'Burial - Untrue', completed: false }
+                ]
+            },
+            {
+                id: Date.now() - 7010,
+                name: 'NTS Resident Mixes',
+                curated: true,
+                items: [
+                    { id: Date.now() - 7011, text: 'Floating Points @ NTS', completed: false },
+                    { id: Date.now() - 7012, text: 'Josey Rebelle show', completed: false },
+                    { id: Date.now() - 7013, text: 'Hunee - Hunch Music', completed: false }
+                ]
+            }
+        ];
+
+        // WATCH collections
+        this.collections.watch = [
+            {
+                id: Date.now() - 8000,
+                name: 'A24 Must-Watch',
+                curated: true,
+                items: [
+                    { id: Date.now() - 8001, text: 'Past Lives', completed: false },
+                    { id: Date.now() - 8002, text: 'Aftersun', completed: false },
+                    { id: Date.now() - 8003, text: 'Everything Everywhere All at Once', completed: false },
+                    { id: Date.now() - 8004, text: 'The Whale', completed: false }
+                ]
+            }
+        ];
+
+        // EAT collections
+        this.collections.eat = [
+            {
+                id: Date.now() - 9000,
+                name: 'Hackney Classics',
+                curated: true,
+                items: [
+                    {
+                        id: Date.now() - 9001,
+                        text: 'Mangal 2',
+                        description: 'Turkish charcoal grill on Stoke Newington Road',
+                        link: 'https://www.mangal2.com',
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 9002,
+                        text: 'The Marksman',
+                        description: 'Elevated British pub fare in a Victorian corner pub',
+                        link: 'https://marksmanpublichouse.com',
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 9003,
+                        text: 'Towpath Cafe',
+                        description: 'Seasonal canal-side cafe on Regent\'s Canal',
+                        completed: false
+                    },
+                    { id: Date.now() - 9004, text: 'E5 Bakehouse sourdough', completed: false },
+                    { id: Date.now() - 9005, text: 'P. Franco wine bar', completed: false }
+                ]
+            },
+            {
+                id: Date.now() - 9010,
+                name: 'Natural Wine Spots',
+                curated: true,
+                items: [
+                    { id: Date.now() - 9011, text: 'Bright - wine & snacks', completed: false },
+                    { id: Date.now() - 9012, text: 'Sager + Wilde', completed: false },
+                    { id: Date.now() - 9013, text: 'Bar Crispin', completed: false },
+                    { id: Date.now() - 9014, text: '40 Maltby Street', completed: false }
+                ]
+            },
+            {
+                id: Date.now() - 9020,
+                name: 'Special Occasion',
+                curated: true,
+                items: [
+                    { id: Date.now() - 9021, text: 'Lyle\'s tasting menu', completed: false },
+                    { id: Date.now() - 9022, text: 'St. JOHN Bread and Wine', completed: false },
+                    { id: Date.now() - 9023, text: 'Rochelle Canteen', completed: false }
+                ]
+            }
+        ];
+
+        // DO collections
+        this.collections.do = [
+            {
+                id: Date.now() - 10000,
+                name: 'Weekend Vibes',
+                curated: true,
+                items: [
+                    {
+                        id: Date.now() - 10001,
+                        text: 'Columbia Road Flower Market',
+                        description: 'Sunday morning flower market in East London',
+                        link: 'https://www.columbiaroad.info',
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 10002,
+                        text: 'Broadway Market',
+                        description: 'Saturday market with food stalls and vintage finds',
+                        completed: false
+                    },
+                    { id: Date.now() - 10003, text: 'Vintage at Beyond Retro', completed: false },
+                    { id: Date.now() - 10004, text: 'Gallery hopping in Shoreditch', completed: false }
+                ]
+            },
+            {
+                id: Date.now() - 10010,
+                name: 'Wellness & Movement',
+                curated: true,
+                items: [
+                    { id: Date.now() - 10011, text: 'London Fields Lido swim', completed: false },
+                    { id: Date.now() - 10012, text: 'Yoga at Frame Shoreditch', completed: false },
+                    { id: Date.now() - 10013, text: 'Ironmonger Row sauna', completed: false },
+                    { id: Date.now() - 10014, text: 'Ride to Epping Forest', completed: false }
+                ]
+            }
+        ];
+
+        this.saveToStorage('items', this.items);
+        this.saveToStorage('collections', this.collections);
+    }
+
+    init() {
+        this.setupModalClose();
+        this.renderOverview();
+    }
+
+    setupModalClose() {
+        const modal = document.getElementById('modal');
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeModal();
+            }
+        });
+    }
+
+    // Navigation
+    openCategory(category) {
+        this.currentCategory = category;
+        document.getElementById('overview-screen').classList.remove('active');
+        document.getElementById('detail-screen').classList.add('active');
+        this.renderDetail();
+    }
+
+    closeCategory() {
+        this.currentCategory = null;
+        document.getElementById('detail-screen').classList.remove('active');
+        document.getElementById('overview-screen').classList.add('active');
+        this.renderOverview();
+    }
+
+    // Rendering
+    renderOverview() {
+        this.categories.forEach(category => {
+            const count = this.items[category].filter(item => !item.completed).length;
+            document.getElementById(`${category}-count`).textContent = count;
+        });
+    }
+
+    renderDetail() {
+        const category = this.currentCategory;
+        const categoryNames = {
+            read: '📚 Read',
+            listen: '🎵 Listen',
+            watch: '📺 Watch',
+            eat: '🍽️ Eat',
+            do: '✨ Do'
+        };
+
+        document.getElementById('detail-title').textContent = categoryNames[category];
+        this.renderDetailItems();
+        this.renderDetailCollections();
+    }
+
+    renderDetailItems() {
+        const listElement = document.getElementById('detail-items-list');
+        const items = this.items[this.currentCategory];
+
+        if (items.length === 0) {
+            listElement.innerHTML = '<div class="empty-state">No items yet. Tap + to add one.</div>';
+            return;
+        }
+
+        // Separate active and completed items
+        const activeItems = items.filter(item => !item.completed);
+        const completedItems = items.filter(item => item.completed);
+
+        let html = '';
+
+        // Active items
+        if (activeItems.length > 0) {
+            html += '<div class="items-container">';
+            activeItems.forEach((item, idx) => {
+                const actualIndex = items.indexOf(item);
+                const hasMetadata = item.description || item.link;
+
+                html += `
+                    <div class="item ${hasMetadata ? 'has-metadata' : ''}">
+                        <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
+                        <div class="item-content">
+                            <div class="item-text">${this.escapeHtml(item.text)}</div>
+                            ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                </svg>
+                                ${this.escapeHtml(new URL(item.link).hostname)}
+                            </a>` : ''}
+                        </div>
+                        <div class="item-actions">
+                            <button onclick="app.showAddToCollectionModal(${actualIndex})" title="Add to collection">📁</button>
+                            <button onclick="app.deleteItem(${actualIndex})" title="Delete">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+
+        // Completed items section
+        if (completedItems.length > 0) {
+            html += `
+                <div class="completed-section">
+                    <h4 class="completed-header">Completed (${completedItems.length})</h4>
+                    <div class="items-container">
+            `;
+            completedItems.forEach((item, idx) => {
+                const actualIndex = items.indexOf(item);
+                const hasMetadata = item.description || item.link;
+
+                html += `
+                    <div class="item completed ${hasMetadata ? 'has-metadata' : ''}">
+                        <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
+                        <div class="item-content">
+                            <div class="item-text">${this.escapeHtml(item.text)}</div>
+                            ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                </svg>
+                                ${this.escapeHtml(new URL(item.link).hostname)}
+                            </a>` : ''}
+                        </div>
+                        <div class="item-actions">
+                            <button onclick="app.deleteItem(${actualIndex})" title="Delete">🗑️</button>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div></div>';
+        }
+
+        listElement.innerHTML = html;
+    }
+
+    renderDetailCollections() {
+        const collectionsElement = document.getElementById('detail-collections');
+        const collections = this.collections[this.currentCategory];
+
+        if (collections.length === 0) {
+            collectionsElement.innerHTML = '<div class="empty-state">No collections yet</div>';
+            return;
+        }
+
+        collectionsElement.innerHTML = collections.map((collection, collectionIndex) => `
+            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
+                <div class="collection-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})">▸</button>
+                        <span class="collection-name">
+                            ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
+                            ${this.escapeHtml(collection.name)}
+                        </span>
+                    </div>
+                    <div class="collection-actions">
+                        <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
+                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete">🗑️</button>
+                    </div>
+                </div>
+                <div class="collection-items">
+                    ${collection.items.length === 0 ?
+                        '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
+                        collection.items.map((item, itemIndex) => {
+                            const hasMetadata = item.description || item.link;
+                            return `
+                                <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
+                                    <div class="collection-item-content">
+                                        <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
+                                        ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                                        ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                            </svg>
+                                            ${this.escapeHtml(new URL(item.link).hostname)}
+                                        </a>` : ''}
+                                    </div>
+                                    <div class="collection-item-actions">
+                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})">Add</button>
+                                        <button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')
+                    }
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // Items
+    showAddItemModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        modalBody.innerHTML = `
+            <h2>New Item</h2>
+            <input type="text" id="item-input" placeholder="Title..." autofocus>
+            <textarea id="item-description" placeholder="Description (optional)" rows="2"></textarea>
+            <input type="url" id="item-link" placeholder="Link (optional)">
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <button onclick="app.addItem()">Add</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+
+        document.getElementById('item-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.addItem();
+            }
+        });
+    }
+
+    addItem() {
+        const input = document.getElementById('item-input');
+        const descriptionInput = document.getElementById('item-description');
+        const linkInput = document.getElementById('item-link');
+
+        const text = input.value.trim();
+        const description = descriptionInput?.value.trim();
+        const link = linkInput?.value.trim();
+
+        if (text) {
+            const newItem = {
+                id: Date.now(),
+                text: text,
+                completed: false
+            };
+
+            if (description) newItem.description = description;
+            if (link) newItem.link = link;
+
+            this.items[this.currentCategory].push(newItem);
+
+            this.saveToStorage('items', this.items);
+            this.renderDetail();
+            this.closeModal();
+        }
+    }
+
+    toggleItem(index) {
+        const item = this.items[this.currentCategory][index];
+        const wasCompleted = item.completed;
+
+        item.completed = !item.completed;
+
+        // Immediate visual update
+        this.renderDetail();
+
+        // If item was just completed, move to bottom after delay
+        if (!wasCompleted && item.completed) {
+            setTimeout(() => {
+                // Remove item from current position
+                const movedItem = this.items[this.currentCategory].splice(index, 1)[0];
+                // Add to end of list
+                this.items[this.currentCategory].push(movedItem);
+
+                this.saveToStorage('items', this.items);
+                this.renderDetail();
+            }, 500);
+        } else {
+            this.saveToStorage('items', this.items);
+        }
+    }
+
+    deleteItem(index) {
+        if (confirm('Delete this item?')) {
+            this.items[this.currentCategory].splice(index, 1);
+            this.saveToStorage('items', this.items);
+            this.renderDetail();
+        }
+    }
+
+    showAddToCollectionModal(itemIndex) {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        const item = this.items[this.currentCategory][itemIndex];
+        const collections = this.collections[this.currentCategory];
+
+        let collectionsHTML = '';
+        if (collections.length === 0) {
+            collectionsHTML = '<div class="empty-state">No collections yet. Create one first!</div>';
+        } else {
+            collectionsHTML = collections.map((collection, idx) => `
+                <div class="modal-collection-option" onclick="app.addItemToCollection(${itemIndex}, ${idx})">
+                    <strong>${this.escapeHtml(collection.name)}</strong>
+                    <span>${collection.items.length} items</span>
+                </div>
+            `).join('');
+        }
+
+        modalBody.innerHTML = `
+            <h2>Add to Collection</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
+            ${collectionsHTML}
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+    }
+
+    addItemToCollection(itemIndex, collectionIndex) {
+        const item = this.items[this.currentCategory][itemIndex];
+        const collection = this.collections[this.currentCategory][collectionIndex];
+
+        if (!collection.items.find(i => i.id === item.id)) {
+            collection.items.push({ ...item });
+            this.saveToStorage('collections', this.collections);
+            this.renderDetail();
+        }
+
+        this.closeModal();
+    }
+
+    // Collections
+    showImportModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        modalBody.innerHTML = `
+            <h2>Import Collection</h2>
+            <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px;">
+                Paste a URL (RSS feed, Spotify playlist, etc.) or a list of items (one per line)
+            </p>
+            <input type="text" id="import-name-input" placeholder="Collection name..." style="margin-bottom: 12px;">
+            <textarea id="import-text-input" placeholder="Paste URL or list here..." rows="8" autofocus></textarea>
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <button onclick="app.processImport()">Import</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+    }
+
+    async processImport() {
+        const nameInput = document.getElementById('import-name-input');
+        const textInput = document.getElementById('import-text-input');
+        const input = textInput.value.trim();
+        const collectionName = nameInput.value.trim() || 'Imported Collection';
+
+        if (!input) return;
+
+        let items = [];
+
+        // Check if it's a URL
+        if (input.startsWith('http://') || input.startsWith('https://')) {
+            items = await this.parseURL(input);
+        } else {
+            // Parse as plain text list
+            items = this.parseTextList(input);
+        }
+
+        if (items.length > 0) {
+            this.collections[this.currentCategory].push({
+                id: Date.now(),
+                name: collectionName,
+                items: items.map(text => ({
+                    id: Date.now() + Math.random(),
+                    text: text,
+                    completed: false
+                })),
+                expanded: true
+            });
+
+            this.saveToStorage('collections', this.collections);
+            this.renderDetail();
+            this.closeModal();
+        } else {
+            alert('Could not parse any items. Please check your input.');
+        }
+    }
+
+    parseTextList(text) {
+        return text.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0)
+            .map(line => line.replace(/^[-*•]\s*/, ''));
+    }
+
+    async parseURL(url) {
+        try {
+            // Try to detect the type of URL and parse accordingly
+            if (url.includes('rss') || url.includes('feed') || url.includes('.xml')) {
+                return await this.parseRSSFeed(url);
+            } else if (url.includes('spotify.com')) {
+                return this.parseSpotifyURL(url);
+            } else if (url.includes('letterboxd.com')) {
+                return this.parseLetterboxdURL(url);
+            } else {
+                // Try to fetch as RSS anyway
+                return await this.parseRSSFeed(url);
+            }
+        } catch (error) {
+            console.error('Error parsing URL:', error);
+            return [];
+        }
+    }
+
+    async parseRSSFeed(url) {
+        try {
+            // Use a CORS proxy for RSS feeds
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            const text = await response.text();
+
+            const parser = new DOMParser();
+            const xml = parser.parseFromString(text, 'text/xml');
+
+            const items = [];
+
+            // Try RSS 2.0 format
+            let entries = xml.querySelectorAll('item');
+            if (entries.length === 0) {
+                // Try Atom format
+                entries = xml.querySelectorAll('entry');
+            }
+
+            entries.forEach(entry => {
+                const title = entry.querySelector('title')?.textContent;
+                if (title) {
+                    items.push(title.trim());
+                }
+            });
+
+            return items.slice(0, 20); // Limit to 20 items
+        } catch (error) {
+            console.error('RSS parsing error:', error);
+            return [];
+        }
+    }
+
+    parseSpotifyURL(url) {
+        // For Spotify, we'd need their API. For now, just extract the playlist name
+        const match = url.match(/playlist\/([a-zA-Z0-9]+)/);
+        if (match) {
+            return [`Spotify playlist: ${match[1]} (requires Spotify API for full import)`];
+        }
+        return [];
+    }
+
+    parseLetterboxdURL(url) {
+        // For Letterboxd, we'd need to scrape or use their API
+        const match = url.match(/letterboxd\.com\/[^/]+\/list\/([^/]+)/);
+        if (match) {
+            return [`Letterboxd list: ${match[1]} (requires scraping for full import)`];
+        }
+        return [];
+    }
+
+    showAddCollectionModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        modalBody.innerHTML = `
+            <h2>New Collection</h2>
+            <input type="text" id="collection-name-input" placeholder="Collection name..." autofocus>
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <button onclick="app.addCollection()">Create</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+
+        document.getElementById('collection-name-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.addCollection();
+        });
+    }
+
+    addCollection() {
+        const input = document.getElementById('collection-name-input');
+        const name = input.value.trim();
+
+        if (name) {
+            this.collections[this.currentCategory].push({
+                id: Date.now(),
+                name: name,
+                items: [],
+                expanded: false
+            });
+
+            this.saveToStorage('collections', this.collections);
+            this.renderDetail();
+            this.closeModal();
+        }
+    }
+
+    toggleCollection(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        collection.expanded = !collection.expanded;
+        this.saveToStorage('collections', this.collections);
+        this.renderDetail();
+    }
+
+    deleteCollection(collectionIndex) {
+        if (confirm('Delete this collection?')) {
+            this.collections[this.currentCategory].splice(collectionIndex, 1);
+            this.saveToStorage('collections', this.collections);
+            this.renderDetail();
+        }
+    }
+
+    deleteCollectionItem(collectionIndex, itemIndex) {
+        this.collections[this.currentCategory][collectionIndex].items.splice(itemIndex, 1);
+        this.saveToStorage('collections', this.collections);
+        this.renderDetail();
+    }
+
+    addCollectionItemToMain(collectionIndex, itemIndex) {
+        const collectionItem = this.collections[this.currentCategory][collectionIndex].items[itemIndex];
+
+        if (!this.items[this.currentCategory].find(i => i.id === collectionItem.id)) {
+            this.items[this.currentCategory].push({ ...collectionItem, completed: false });
+            this.saveToStorage('items', this.items);
+            this.renderDetail();
+        }
+    }
+
+    // Utilities
+    closeModal() {
+        document.getElementById('modal').style.display = 'none';
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    saveToStorage(key, data) {
+        localStorage.setItem(`anygood_${key}`, JSON.stringify(data));
+    }
+
+    loadFromStorage(key) {
+        const data = localStorage.getItem(`anygood_${key}`);
+        return data ? JSON.parse(data) : null;
+    }
+}
+
+const app = new AnygoodApp();

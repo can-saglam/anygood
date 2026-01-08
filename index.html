@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>anygood</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <!-- Overview Screen -->
+        <div id="overview-screen" class="screen active">
+            <header class="main-header">
+                <h1>anygood</h1>
+            </header>
+
+            <div class="category-grid">
+                <div class="category-card" data-category="read" onclick="app.openCategory('read')">
+                    <div class="category-icon">📚</div>
+                    <h2>Read</h2>
+                    <div class="category-count" id="read-count">0</div>
+                </div>
+
+                <div class="category-card" data-category="listen" onclick="app.openCategory('listen')">
+                    <div class="category-icon">🎵</div>
+                    <h2>Listen</h2>
+                    <div class="category-count" id="listen-count">0</div>
+                </div>
+
+                <div class="category-card" data-category="watch" onclick="app.openCategory('watch')">
+                    <div class="category-icon">📺</div>
+                    <h2>Watch</h2>
+                    <div class="category-count" id="watch-count">0</div>
+                </div>
+
+                <div class="category-card" data-category="eat" onclick="app.openCategory('eat')">
+                    <div class="category-icon">🍽️</div>
+                    <h2>Eat</h2>
+                    <div class="category-count" id="eat-count">0</div>
+                </div>
+
+                <div class="category-card" data-category="do" onclick="app.openCategory('do')">
+                    <div class="category-icon">✨</div>
+                    <h2>Do</h2>
+                    <div class="category-count" id="do-count">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detail Screen -->
+        <div id="detail-screen" class="screen">
+            <header class="detail-header">
+                <button class="back-btn" onclick="app.closeCategory()">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M12 4L6 10L12 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+                <h1 id="detail-title"></h1>
+                <div style="display: flex; gap: 8px;">
+                    <button class="add-btn" onclick="app.showExportModal()" title="Export & Share">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M14 14V17H2V14H0V17C0 18.1 0.9 19 2 19H14C15.1 19 16 18.1 16 17V14H14ZM13 7L11.59 5.59L9 8.17V0H7V8.17L4.41 5.59L3 7L8 12L13 7Z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                    <button class="add-btn" onclick="app.showAddItemModal()">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="detail-content">
+                <!-- Collections Section (Recommendations) -->
+                <div class="section">
+                    <div class="section-header">
+                        <h3 class="section-title">Recommendations</h3>
+                        <div style="display: flex; gap: 12px;">
+                            <button class="add-collection-btn-small" onclick="app.showImportModal()" title="Import from URL or list">📥</button>
+                            <button class="add-collection-btn-small" onclick="app.showAddCollectionModal()">+</button>
+                        </div>
+                    </div>
+                    <div id="detail-collections"></div>
+                </div>
+
+                <!-- Main Items Section -->
+                <div class="section">
+                    <h3 class="section-title">To Do</h3>
+                    <div class="items-list" id="detail-items-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
