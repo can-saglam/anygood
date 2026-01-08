@@ -3,6 +3,7 @@ class AnygoodApp {
         this.categories = ['read', 'listen', 'watch', 'eat', 'do'];
         this.items = this.loadFromStorage('items') || {};
         this.collections = this.loadFromStorage('collections') || {};
+        this.pendingToggle = null; // Track pending toggle timeout
 
         // Suggested sources for each category
         this.suggestedSources = {
@@ -656,22 +657,36 @@ class AnygoodApp {
 
     toggleItem(index) {
         const item = this.items[this.currentCategory][index];
-        const wasCompleted = item.completed;
 
+        // Clear any pending toggle timeout
+        if (this.pendingToggle) {
+            clearTimeout(this.pendingToggle);
+            this.pendingToggle = null;
+        }
+
+        // Toggle the completion state
         item.completed = !item.completed;
 
         // Immediate visual update
+        this.saveToStorage('items', this.items);
         this.renderDetail();
 
         // Move to appropriate section after 2 second delay
-        setTimeout(() => {
-            // Remove item from current position
-            const movedItem = this.items[this.currentCategory].splice(index, 1)[0];
-            // Add to end of list
-            this.items[this.currentCategory].push(movedItem);
+        this.pendingToggle = setTimeout(() => {
+            // Find the item by id (safer than using index which may have changed)
+            const currentIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
 
-            this.saveToStorage('items', this.items);
-            this.renderDetail();
+            if (currentIndex !== -1) {
+                // Remove item from current position
+                const movedItem = this.items[this.currentCategory].splice(currentIndex, 1)[0];
+                // Add to end of list
+                this.items[this.currentCategory].push(movedItem);
+
+                this.saveToStorage('items', this.items);
+                this.renderDetail();
+            }
+
+            this.pendingToggle = null;
         }, 2000);
     }
 
