@@ -323,6 +323,12 @@ class AnygoodApp {
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
+        
+        // Initialize keyboard shortcuts display
+        const shortcutsEl = document.getElementById('keyboard-shortcuts');
+        if (shortcutsEl) {
+            shortcutsEl.innerHTML = this.renderKeyboardShortcuts();
+        }
     }
 
     setupQuickAdd() {
@@ -356,37 +362,103 @@ class AnygoodApp {
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+            const modal = document.getElementById('modal');
+            const isModalOpen = modal && modal.style.display === 'block';
 
-            // Cmd/Ctrl + N: New item
-            if (cmdOrCtrl && e.key === 'n' && this.currentCategory) {
+            // Don't handle shortcuts if typing in an input/textarea (except Esc)
+            if ((e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') && e.key !== 'Escape') {
+                return;
+            }
+
+            // Cmd/Ctrl + A: Bring up app / Select all
+            if (cmdOrCtrl && e.key === 'a' && !isModalOpen) {
+                if (this.bulkMode) {
+                    e.preventDefault();
+                    this.selectAllItems();
+                } else if (!this.currentCategory) {
+                    // On overview, focus quick add input
+                    e.preventDefault();
+                    const quickAddInput = document.getElementById('quick-add-input');
+                    if (quickAddInput) {
+                        quickAddInput.focus();
+                    }
+                } else {
+                    // In detail view without bulk mode, could select all items
+                    // For now, just prevent default to avoid selecting all text
+                    e.preventDefault();
+                }
+            }
+
+            // Cmd/Ctrl + N: New item (works everywhere)
+            if (cmdOrCtrl && e.key === 'n' && !isModalOpen) {
                 e.preventDefault();
-                this.showAddItemModal();
+                if (this.currentCategory) {
+                    this.showAddItemModal();
+                } else {
+                    // On overview, focus quick add input
+                    const quickAddInput = document.getElementById('quick-add-input');
+                    if (quickAddInput) {
+                        quickAddInput.focus();
+                    }
+                }
             }
 
             // Cmd/Ctrl + Z: Undo
-            if (cmdOrCtrl && e.key === 'z' && !e.shiftKey) {
+            if (cmdOrCtrl && e.key === 'z' && !e.shiftKey && !isModalOpen) {
                 e.preventDefault();
                 this.undo();
             }
 
             // Cmd/Ctrl + Shift + Z: Redo
-            if (cmdOrCtrl && e.key === 'z' && e.shiftKey) {
+            if (cmdOrCtrl && e.key === 'z' && e.shiftKey && !isModalOpen) {
                 e.preventDefault();
                 this.redo();
             }
 
-            // Cmd/Ctrl + A: Select all (in bulk mode)
-            if (cmdOrCtrl && e.key === 'a' && this.bulkMode) {
-                e.preventDefault();
-                this.selectAllItems();
-            }
-
             // Delete/Backspace: Delete selected items (in bulk mode)
-            if ((e.key === 'Delete' || e.key === 'Backspace') && this.bulkMode && this.selectedItems.size > 0) {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this.bulkMode && this.selectedItems.size > 0 && !isModalOpen) {
                 e.preventDefault();
                 this.deleteSelectedItems();
             }
+
+            // Esc: Close modal or go back
+            if (e.key === 'Escape' && isModalOpen) {
+                this.closeModal();
+            } else if (e.key === 'Escape' && this.currentCategory && !isModalOpen) {
+                this.closeCategory();
+            }
         });
+    }
+
+    renderKeyboardShortcuts() {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const cmdKey = isMac ? '⌘' : 'Ctrl';
+        
+        let shortcuts = [];
+        
+        if (this.currentCategory) {
+            shortcuts = [
+                { key: `${cmdKey}N`, desc: 'New item' },
+                { key: `${cmdKey}Z`, desc: 'Undo' },
+                { key: `${cmdKey}⇧Z`, desc: 'Redo' },
+                { key: 'Esc', desc: 'Back' }
+            ];
+            if (this.bulkMode) {
+                shortcuts.push(
+                    { key: `${cmdKey}A`, desc: 'Select all' },
+                    { key: 'Del', desc: 'Delete' }
+                );
+            }
+        } else {
+            shortcuts = [
+                { key: `${cmdKey}A`, desc: 'Focus input' },
+                { key: `${cmdKey}N`, desc: 'Focus input' }
+            ];
+        }
+
+        return shortcuts.map(s => 
+            `<span class="shortcut-hint"><kbd>${this.escapeHtml(s.key)}</kbd> <span class="shortcut-desc">${this.escapeHtml(s.desc)}</span></span>`
+        ).join('');
     }
 
     setupDarkMode() {
@@ -532,6 +604,12 @@ class AnygoodApp {
             
             grid.appendChild(card);
         });
+
+        // Update keyboard shortcuts display
+        const shortcutsEl = document.getElementById('keyboard-shortcuts');
+        if (shortcutsEl) {
+            shortcutsEl.innerHTML = this.renderKeyboardShortcuts();
+        }
     }
 
     updateCategoryCounts() {
@@ -547,6 +625,12 @@ class AnygoodApp {
 
         this.renderDetailItems();
         this.renderDetailCollections();
+
+        // Update keyboard shortcuts display
+        const shortcutsEl = document.getElementById('keyboard-shortcuts');
+        if (shortcutsEl) {
+            shortcutsEl.innerHTML = this.renderKeyboardShortcuts();
+        }
     }
 
     renderDetailItems() {
@@ -667,49 +751,206 @@ class AnygoodApp {
             return;
         }
 
-        collectionsElement.innerHTML = collections.map((collection, collectionIndex) => `
-            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
-                <div class="collection-header">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})" aria-label="Toggle collection">▸</button>
-                        <span class="collection-name">
-                            ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
-                            ${this.escapeHtml(collection.name)}
-                        </span>
+        // Separate digest from other collections
+        const digestCollection = collections.find(c => c.type === 'digest');
+        const otherCollections = collections.filter(c => c.type !== 'digest');
+
+        let html = '';
+
+        // Render digest first if it exists
+        if (digestCollection) {
+            const digestIndex = collections.indexOf(digestCollection);
+            const lastUpdated = digestCollection.lastUpdated 
+                ? this.formatRelativeTime(digestCollection.lastUpdated) 
+                : null;
+            
+            html += `
+                <div class="collection digest ${digestCollection.expanded ? 'expanded' : ''}" data-collection-id="${digestCollection.id}">
+                    <div class="collection-header">
+                        <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                            <button class="collection-toggle" onclick="app.toggleCollection(${digestIndex})" aria-label="Toggle collection">▸</button>
+                            <span class="collection-name">
+                                <span class="badge-digest">📰</span>
+                                ${this.escapeHtml(digestCollection.name)}
+                            </span>
+                            ${digestCollection.sources && digestCollection.sources.length > 0 ? `
+                                <span class="badge-live" title="Live RSS feed">Live</span>
+                            ` : ''}
+                        </div>
+                        <div class="collection-actions">
+                            ${lastUpdated ? `<span class="collection-updated" title="Last updated ${new Date(digestCollection.lastUpdated).toLocaleString()}">${lastUpdated}</span>` : ''}
+                            ${digestCollection.sources && digestCollection.sources.length > 0 ? `
+                                <button onclick="app.refreshDigest(${digestIndex})" title="Refresh feeds" class="refresh-btn" aria-label="Refresh feeds">↻</button>
+                            ` : ''}
+                            <span style="color: var(--text-secondary); font-size: 0.85em;">${digestCollection.items.length}</span>
+                        </div>
                     </div>
-                    <div class="collection-actions">
-                        <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
-                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
+                    <div class="collection-items">
+                        ${digestCollection.items.length === 0 ?
+                            '<div class="empty-state" style="padding: 20px;">Empty digest. Import from RSS feeds to populate.</div>' :
+                            digestCollection.items.map((item, itemIndex) => {
+                                const hasMetadata = item.description || item.link || item.pubDate || item.source;
+                                const relativeTime = item.pubDate ? this.formatRelativeTime(item.pubDate) : null;
+                                return `
+                                    <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
+                                        <div class="collection-item-content">
+                                            <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
+                                            ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description.length > 150 ? item.description.substring(0, 150) + '...' : item.description)}</div>` : ''}
+                                            <div class="collection-item-meta">
+                                                ${item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
+                                                ${relativeTime ? `<span class="item-date">${relativeTime}</span>` : ''}
+                                                ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                                    </svg>
+                                                    ${this.escapeHtml(new URL(item.link).hostname)}
+                                                </a>` : ''}
+                                            </div>
+                                        </div>
+                                        <div class="collection-item-actions">
+                                            <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${digestIndex}, ${itemIndex})">Add</button>
+                                            <button onclick="app.deleteCollectionItem(${digestIndex}, ${itemIndex})">×</button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')
+                        }
                     </div>
                 </div>
-                <div class="collection-items">
-                    ${collection.items.length === 0 ?
-                        '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
-                        collection.items.map((item, itemIndex) => {
-                            const hasMetadata = item.description || item.link;
-                            return `
-                                <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
-                                    <div class="collection-item-content">
-                                        <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
-                                        ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
-                                        ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                            </svg>
-                                            ${this.escapeHtml(new URL(item.link).hostname)}
-                                        </a>` : ''}
+            `;
+        }
+
+        // Render other collections
+        otherCollections.forEach((collection, idx) => {
+            const collectionIndex = collections.indexOf(collection);
+            html += `
+                <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
+                    <div class="collection-header">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})" aria-label="Toggle collection">▸</button>
+                            <span class="collection-name">
+                                ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
+                                ${this.escapeHtml(collection.name)}
+                            </span>
+                        </div>
+                        <div class="collection-actions">
+                            <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
+                            <button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="collection-items">
+                        ${collection.items.length === 0 ?
+                            '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
+                            collection.items.map((item, itemIndex) => {
+                                const hasMetadata = item.description || item.link;
+                                return `
+                                    <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
+                                        <div class="collection-item-content">
+                                            <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
+                                            ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                                </svg>
+                                                ${this.escapeHtml(new URL(item.link).hostname)}
+                                            </a>` : ''}
+                                        </div>
+                                        <div class="collection-item-actions">
+                                            <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})">Add</button>
+                                            <button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>
+                                        </div>
                                     </div>
-                                    <div class="collection-item-actions">
-                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})">Add</button>
-                                        <button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>
-                                    </div>
-                                </div>
-                            `;
-                        }).join('')
-                    }
+                                `;
+                            }).join('')
+                        }
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        });
+
+        collectionsElement.innerHTML = html;
+    }
+
+    formatRelativeTime(timestamp) {
+        if (!timestamp) return null;
+        
+        const date = typeof timestamp === 'number' ? new Date(timestamp) : new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    async refreshDigest(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (!collection || !collection.sources || collection.sources.length === 0) return;
+
+        try {
+            this.showLoading('Refreshing feeds...');
+            
+            for (const source of collection.sources) {
+                try {
+                    const items = await this.rssParser.parseURL(source.url);
+                    
+                    // Update existing items or add new ones
+                    items.forEach(item => {
+                        const existingItem = collection.items.find(
+                            i => i.text === item.title || (i.link && item.link && i.link === item.link)
+                        );
+                        
+                        if (existingItem) {
+                            existingItem.pubDate = item.pubDate;
+                            existingItem.fetchedAt = Date.now();
+                            if (item.description && !existingItem.description) {
+                                existingItem.description = item.description;
+                            }
+                        } else {
+                            collection.items.push({
+                                id: Date.now() + Math.random(),
+                                text: item.title,
+                                description: item.description || null,
+                                link: item.link || null,
+                                pubDate: item.pubDate || null,
+                                source: source.name,
+                                fetchedAt: Date.now(),
+                                completed: false
+                            });
+                        }
+                    });
+                    
+                    source.lastFetched = Date.now();
+                } catch (error) {
+                    console.error(`Failed to refresh ${source.name}:`, error);
+                }
+            }
+
+            // Sort by publication date
+            collection.items.sort((a, b) => {
+                if (a.pubDate && b.pubDate) {
+                    return new Date(b.pubDate) - new Date(a.pubDate);
+                }
+                return (b.fetchedAt || 0) - (a.fetchedAt || 0);
+            });
+
+            collection.lastUpdated = Date.now();
+
+            this.saveState();
+            this.storage.save('collections', this.collections);
+            this.renderDetail();
+            this.hideLoading();
+            this.showNotification('Digest refreshed', 'success');
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Refresh failed: ${error.message}`, 'error');
+        }
     }
 
     // Items - Enhanced with AI and metadata
@@ -1071,21 +1312,90 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: name,
-                    items: items.map(text => ({
+                // Find or create Anygood Digest collection
+                let digestCollection = this.collections[this.currentCategory].find(
+                    c => c.name === 'Anygood Digest' && c.type === 'digest'
+                );
+
+                if (!digestCollection) {
+                    digestCollection = {
+                        id: Date.now(),
+                        name: 'Anygood Digest',
+                        type: 'digest',
+                        sources: [],
+                        items: [],
+                        expanded: true,
+                        lastUpdated: Date.now()
+                    };
+                    this.collections[this.currentCategory].unshift(digestCollection);
+                }
+
+                // Add source if not already present
+                const sourceExists = digestCollection.sources?.some(s => s.url === url);
+                if (!sourceExists) {
+                    if (!digestCollection.sources) digestCollection.sources = [];
+                    digestCollection.sources.push({
+                        name: name,
+                        url: url,
+                        lastFetched: Date.now()
+                    });
+                } else {
+                    // Update last fetched time
+                    const source = digestCollection.sources.find(s => s.url === url);
+                    if (source) source.lastFetched = Date.now();
+                }
+
+                // Convert RSS items to collection items with metadata
+                const newItems = items.map(item => {
+                    const existingItem = digestCollection.items.find(
+                        i => i.text === item.title || i.link === item.link
+                    );
+                    
+                    if (existingItem) {
+                        // Update existing item
+                        existingItem.pubDate = item.pubDate;
+                        existingItem.fetchedAt = Date.now();
+                        return existingItem;
+                    }
+                    
+                    return {
                         id: Date.now() + Math.random(),
-                        text: text,
+                        text: item.title,
+                        description: item.description || null,
+                        link: item.link || null,
+                        pubDate: item.pubDate || null,
+                        source: name,
+                        fetchedAt: Date.now(),
                         completed: false
-                    })),
-                    expanded: true
+                    };
                 });
+
+                // Merge new items, avoiding duplicates
+                newItems.forEach(newItem => {
+                    const exists = digestCollection.items.some(
+                        existing => existing.text === newItem.text || 
+                                   (existing.link && newItem.link && existing.link === newItem.link)
+                    );
+                    if (!exists) {
+                        digestCollection.items.push(newItem);
+                    }
+                });
+
+                // Sort by publication date (newest first)
+                digestCollection.items.sort((a, b) => {
+                    if (a.pubDate && b.pubDate) {
+                        return new Date(b.pubDate) - new Date(a.pubDate);
+                    }
+                    return (b.fetchedAt || 0) - (a.fetchedAt || 0);
+                });
+
+                digestCollection.lastUpdated = Date.now();
+
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items`, 'success');
+                this.showNotification(`Added ${items.length} items to Anygood Digest`, 'success');
             } else {
                 this.hideLoading();
                 this.showNotification(`Could not fetch items from ${name}`, 'error');
@@ -1107,9 +1417,18 @@ class AnygoodApp {
         try {
             this.showLoading('Processing import...');
             let items = [];
+            let isRSS = false;
 
             if (input.startsWith('http://') || input.startsWith('https://')) {
-                items = await this.rssParser.parseURL(input);
+                const parsed = await this.rssParser.parseURL(input);
+                // Check if it's RSS data (has title property) or just strings
+                if (parsed.length > 0 && typeof parsed[0] === 'object' && parsed[0].title) {
+                    isRSS = true;
+                    items = parsed;
+                } else {
+                    // Fallback for non-RSS URLs
+                    items = parsed.map(item => typeof item === 'string' ? item : item.title || item);
+                }
             } else {
                 items = input.split('\n')
                     .map(line => line.trim())
@@ -1120,16 +1439,72 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: collectionName,
-                    items: items.map(text => ({
-                        id: Date.now() + Math.random(),
-                        text: text,
-                        completed: false
-                    })),
-                    expanded: true
-                });
+                if (isRSS) {
+                    // Add to digest if RSS
+                    let digestCollection = this.collections[this.currentCategory].find(
+                        c => c.name === 'Anygood Digest' && c.type === 'digest'
+                    );
+
+                    if (!digestCollection) {
+                        digestCollection = {
+                            id: Date.now(),
+                            name: 'Anygood Digest',
+                            type: 'digest',
+                            sources: [],
+                            items: [],
+                            expanded: true,
+                            lastUpdated: Date.now()
+                        };
+                        this.collections[this.currentCategory].unshift(digestCollection);
+                    }
+
+                    // Add source
+                    if (!digestCollection.sources) digestCollection.sources = [];
+                    const sourceUrl = input;
+                    const sourceExists = digestCollection.sources.some(s => s.url === sourceUrl);
+                    if (!sourceExists) {
+                        digestCollection.sources.push({
+                            name: collectionName,
+                            url: sourceUrl,
+                            lastFetched: Date.now()
+                        });
+                    }
+
+                    // Add items
+                    items.forEach(item => {
+                        const existingItem = digestCollection.items.find(
+                            i => i.text === item.title || (i.link && item.link && i.link === item.link)
+                        );
+                        
+                        if (!existingItem) {
+                            digestCollection.items.push({
+                                id: Date.now() + Math.random(),
+                                text: item.title,
+                                description: item.description || null,
+                                link: item.link || null,
+                                pubDate: item.pubDate || null,
+                                source: collectionName,
+                                fetchedAt: Date.now(),
+                                completed: false
+                            });
+                        }
+                    });
+
+                    digestCollection.lastUpdated = Date.now();
+                } else {
+                    // Regular collection for non-RSS imports
+                    this.collections[this.currentCategory].push({
+                        id: Date.now(),
+                        name: collectionName,
+                        items: items.map(text => ({
+                            id: Date.now() + Math.random(),
+                            text: text,
+                            completed: false
+                        })),
+                        expanded: true
+                    });
+                }
+                
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();

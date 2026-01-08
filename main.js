@@ -33,7 +33,7 @@ mb.on('ready', () => {
   console.log('anygood is ready in menu bar');
 
   // Optional: Add a context menu for right-click
-  const { Menu } = require('electron');
+  const { Menu, globalShortcut } = require('electron');
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Refresh',
@@ -52,6 +52,22 @@ mb.on('ready', () => {
   mb.tray.on('right-click', () => {
     mb.tray.popUpContextMenu(contextMenu);
   });
+
+  // Register global shortcut Command+A to show window
+  const shortcut = process.platform === 'darwin' ? 'Command+A' : 'CommandOrControl+A';
+  globalShortcut.register(shortcut, () => {
+    if (mb.window && mb.window.isVisible()) {
+      mb.hideWindow();
+    } else {
+      mb.showWindow();
+    }
+  });
+});
+
+// Unregister shortcuts on app quit
+mb.app.on('will-quit', () => {
+  const { globalShortcut } = require('electron');
+  globalShortcut.unregisterAll();
 });
 
 mb.on('after-create-window', () => {
