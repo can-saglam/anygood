@@ -490,7 +490,7 @@ class AnygoodApp {
                 const hasMetadata = item.description || item.link;
 
                 html += `
-                    <div class="item ${hasMetadata ? 'has-metadata' : ''}">
+                    <div class="item ${hasMetadata ? 'has-metadata' : ''}" data-item-id="${item.id}">
                         <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
                         <div class="item-content">
                             <div class="item-text">${this.escapeHtml(item.text)}</div>
@@ -524,7 +524,7 @@ class AnygoodApp {
                 const hasMetadata = item.description || item.link;
 
                 html += `
-                    <div class="item completed ${hasMetadata ? 'has-metadata' : ''}">
+                    <div class="item completed ${hasMetadata ? 'has-metadata' : ''}" data-item-id="${item.id}">
                         <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
                         <div class="item-content">
                             <div class="item-text">${this.escapeHtml(item.text)}</div>
@@ -667,9 +667,17 @@ class AnygoodApp {
         // Toggle the completion state
         item.completed = !item.completed;
 
-        // Immediate visual update (shows checked/unchecked but stays in place)
+        // Just update the checkbox visually without re-rendering
+        const itemElement = document.querySelector(`.item[data-item-id="${item.id}"]`);
+        if (itemElement) {
+            if (item.completed) {
+                itemElement.classList.add('completed');
+            } else {
+                itemElement.classList.remove('completed');
+            }
+        }
+
         this.saveToStorage('items', this.items);
-        this.renderDetail();
 
         // Move to appropriate section after 2 second delay with animation
         this.pendingToggle = setTimeout(() => {
@@ -677,14 +685,11 @@ class AnygoodApp {
             const currentIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
 
             if (currentIndex !== -1) {
-                // Add moving-out animation class
-                const itemElements = document.querySelectorAll('.item');
-                itemElements.forEach((el) => {
-                    const checkbox = el.querySelector('.item-checkbox');
-                    if (checkbox && checkbox.getAttribute('onclick').includes(currentIndex)) {
-                        el.classList.add('moving-out');
-                    }
-                });
+                // Add moving-out animation class to the specific item using its data-item-id
+                const itemEl = document.querySelector(`.item[data-item-id="${item.id}"]`);
+                if (itemEl) {
+                    itemEl.classList.add('moving-out');
+                }
 
                 // Wait for animation to complete, then move the item
                 setTimeout(() => {
@@ -698,16 +703,12 @@ class AnygoodApp {
                     // Re-render and add moving-in animation to the new position
                     this.renderDetail();
 
-                    // Find and animate the newly positioned item
+                    // Find and animate the newly positioned item using data-item-id
                     setTimeout(() => {
-                        const allItems = document.querySelectorAll('.item');
-                        const newIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
-                        allItems.forEach((el) => {
-                            const checkbox = el.querySelector('.item-checkbox');
-                            if (checkbox && checkbox.getAttribute('onclick').includes(newIndex)) {
-                                el.classList.add('moving-in');
-                            }
-                        });
+                        const newItemElement = document.querySelector(`.item[data-item-id="${item.id}"]`);
+                        if (newItemElement) {
+                            newItemElement.classList.add('moving-in');
+                        }
                     }, 50);
                 }, 400); // Match the slideOut animation duration
             }

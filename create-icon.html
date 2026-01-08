@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Icon Generator</title>
+</head>
+<body>
+    <canvas id="canvas" width="44" height="44"></canvas>
+    <div>
+        <button onclick="download('IconTemplate.png', 22)">Download 1x (22x22)</button>
+        <button onclick="download('IconTemplate@2x.png', 44)">Download 2x (44x44)</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Draw a simple checkmark icon for the menu bar
+        ctx.fillStyle = '#000000';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        // Draw checkmark
+        ctx.beginPath();
+        ctx.moveTo(12, 22);
+        ctx.lineTo(18, 28);
+        ctx.lineTo(32, 14);
+        ctx.stroke();
+
+        // Draw circle around it
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(22, 22, 18, 0, Math.PI * 2);
+        ctx.stroke();
+
+        function download(filename, size) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = size;
+            tempCanvas.height = size;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCtx.drawImage(canvas, 0, 0, 44, 44, 0, 0, size, size);
+
+            tempCanvas.toBlob(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+        }
+    </script>
+</body>
+</html>

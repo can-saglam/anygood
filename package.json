@@ -1,0 +1,37 @@
+{
+  "name": "anygood",
+  "version": "1.0.0",
+  "description": "A curated todo app for East London creatives",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-builder",
+    "package:mac": "electron-builder --mac"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "dependencies": {
+    "menubar": "^9.3.0"
+  },
+  "build": {
+    "appId": "com.anygood.app",
+    "productName": "anygood",
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "files": [
+      "**/*",
+      "!**/*.md",
+      "!assets/icon.png"
+    ]
+  }
+}
