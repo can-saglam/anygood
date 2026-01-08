@@ -70,6 +70,38 @@ class AnygoodApp {
             // Save placeholder data immediately
             this.storage.save('items', this.items);
             this.storage.save('collections', this.collections);
+        } else {
+            // Ensure each category has at least an empty Anygood Digest collection if collections are empty
+            this.categories.forEach(cat => {
+                if (!this.collections[cat] || this.collections[cat].length === 0) {
+                    // Create empty Anygood Digest collection
+                    this.collections[cat] = [{
+                        id: Date.now(),
+                        name: 'Anygood Digest',
+                        digest: true,
+                        expanded: true,
+                        lastUpdated: Date.now(),
+                        sourceUrl: null,
+                        items: []
+                    }];
+                    this.storage.save('collections', this.collections);
+                } else {
+                    // Check if Anygood Digest exists, if not add it
+                    const hasDigest = this.collections[cat].some(c => c.name === 'Anygood Digest' && c.digest);
+                    if (!hasDigest) {
+                        this.collections[cat].unshift({
+                            id: Date.now(),
+                            name: 'Anygood Digest',
+                            digest: true,
+                            expanded: true,
+                            lastUpdated: Date.now(),
+                            sourceUrl: null,
+                            items: []
+                        });
+                        this.storage.save('collections', this.collections);
+                    }
+                }
+            });
         }
 
         // Save initial state for undo
@@ -616,26 +648,48 @@ class AnygoodApp {
         // Listen for focus events from Electron
         if (window.electronAPI) {
             window.electronAPI.onFocusQuickAdd(() => {
-                this.focusQuickAddInput();
+                // Use a longer timeout to ensure DOM is ready
+                setTimeout(() => this.focusQuickAddInput(), 200);
             });
         }
         
         // Also focus when window becomes visible (for browser compatibility)
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden && !this.currentCategory) {
-                setTimeout(() => this.focusQuickAddInput(), 100);
+                setTimeout(() => this.focusQuickAddInput(), 200);
             }
         });
+        
+        // Focus on initial load if on main view
+        setTimeout(() => {
+            if (!this.currentCategory) {
+                this.focusQuickAddInput();
+            }
+        }, 300);
     }
 
     focusQuickAddInput() {
         // Only focus if we're on the main view
         if (!this.currentCategory) {
-            const input = document.getElementById('quick-add-input');
-            if (input) {
-                input.focus();
-                input.select();
-            }
+            // Try multiple times with increasing delays to ensure DOM is ready
+            const tryFocus = (attempt = 0) => {
+                const input = document.getElementById('quick-add-input');
+                if (input) {
+                    try {
+                        input.focus();
+                        input.select();
+                    } catch (e) {
+                        // Retry if focus failed and we haven't tried too many times
+                        if (attempt < 3) {
+                            setTimeout(() => tryFocus(attempt + 1), 100 * (attempt + 1));
+                        }
+                    }
+                } else if (attempt < 5) {
+                    // Retry if element not found yet
+                    setTimeout(() => tryFocus(attempt + 1), 100 * (attempt + 1));
+                }
+            };
+            tryFocus();
         }
     }
 
@@ -1013,6 +1067,8 @@ class AnygoodApp {
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
+        // Focus input when returning to main view
+        setTimeout(() => this.focusQuickAddInput(), 100);
     }
 
     // Rendering

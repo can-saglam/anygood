@@ -3,6 +3,10 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   onFocusQuickAdd: (callback) => {
-    ipcRenderer.on('focus-quick-add', callback);
+    ipcRenderer.on('focus-quick-add', (event, ...args) => {
+      if (callback) {
+        callback();
+      }
+    });
   }
 });

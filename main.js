@@ -55,8 +55,12 @@ mb.on('ready', () => {
         mb.showWindow();
         if (mb.window) {
           mb.window.focus();
-          // Send message to focus input field
-          mb.window.webContents.send('focus-quick-add');
+          // Send message to focus input field with delay to ensure DOM is ready
+          setTimeout(() => {
+            if (mb.window && !mb.window.isDestroyed()) {
+              mb.window.webContents.send('focus-quick-add');
+            }
+          }, 300);
         }
       }
     });
@@ -123,11 +127,12 @@ mb.on('after-create-window', () => {
   
   // Focus input field when window is shown
   mb.window.on('show', () => {
+    // Use longer delay to ensure DOM is ready
     setTimeout(() => {
       if (mb.window && !mb.window.isDestroyed()) {
         mb.window.webContents.send('focus-quick-add');
       }
-    }, 150);
+    }, 300);
   });
   
   // Also focus when window gains focus
@@ -136,7 +141,7 @@ mb.on('after-create-window', () => {
       if (mb.window && !mb.window.isDestroyed()) {
         mb.window.webContents.send('focus-quick-add');
       }
-    }, 150);
+    }, 200);
   });
 });
 
@@ -146,7 +151,7 @@ mb.on('show', () => {
     if (mb.window && !mb.window.isDestroyed()) {
       mb.window.webContents.send('focus-quick-add');
     }
-  }, 150);
+  }, 300);
 });
 
 // Handle app activation (macOS)
