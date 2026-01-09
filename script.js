@@ -1718,10 +1718,35 @@ class AnygoodApp {
     // Items - Enhanced with AI and metadata
     showAddItemModal() {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
 
-        modalBody.innerHTML = `
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
             <h2>New Item</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
+        // Set body content (without the h2 title since it's in header now)
+        modalBody.innerHTML = `
             <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
                 Try natural language: "Read 'The Creative Act' by Rick Rubin"
             </p>
