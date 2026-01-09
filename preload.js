@@ -8,5 +8,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
         callback();
       }
     });
+  },
+  triggerHaptic: (intensity) => {
+    ipcRenderer.send('trigger-haptic', intensity);
+  },
+  fetchURLMetadata: async (url) => {
+    return await ipcRenderer.invoke('fetch-url-metadata', url);
   }
 });

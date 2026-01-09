@@ -5,6 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build:haptic": "swiftc haptic/haptic.swift -o haptic/haptic",
+    "prepackage": "npm run build:haptic",
     "package": "electron-builder",
     "package:mac": "electron-builder --mac"
   },
@@ -31,7 +33,14 @@
     "files": [
       "**/*",
       "!**/*.md",
-      "!assets/icon.png"
+      "!assets/icon.png",
+      "haptic/haptic"
+    ],
+    "extraFiles": [
+      {
+        "from": "haptic/haptic",
+        "to": "haptic/haptic"
+      }
     ]
   }
 }

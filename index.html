@@ -116,15 +116,16 @@
                 </div>
             </div>
 
-            <!-- Floating Add Button -->
-            <button class="floating-add-btn" onclick="app.showAddItemModal()" title="Add new item (Cmd+N)" aria-label="Add new item">
-                <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-                <span class="floating-add-hint">cmd + n</span>
-            </button>
         </div>
     </div>
+
+    <!-- Floating Add Button (outside .app to avoid transform inheritance) -->
+    <button class="floating-add-btn" onclick="app.showAddItemModal()" title="Add new item (Cmd+N)" aria-label="Add new item">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
+            <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="floating-add-hint">cmd + n</span>
+    </button>
 
     <!-- Modal -->
     <div id="modal" class="modal">
@@ -141,6 +142,7 @@
     <script src="js/search-engine.js"></script>
     <script src="js/ai-features.js"></script>
     <script src="js/undo-redo.js"></script>
+    <script src="js/url-parser.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

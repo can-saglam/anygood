@@ -268,8 +268,9 @@ body {
 
 .category-delete-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 50%;
+    right: 18px;
+    transform: translateY(-50%);
     background: rgba(255, 59, 48, 0.1);
     border: none;
     border-radius: 50%;
@@ -289,6 +290,10 @@ body {
 
 .category-card.custom:hover .category-delete-btn {
     opacity: 1;
+}
+
+.category-card.custom:hover .category-count {
+    opacity: 0;
 }
 
 .category-delete-btn:hover {
@@ -1282,8 +1287,8 @@ body {
 }
 
 .digest-item-card:hover {
-    transform: translateY(-3px) scale(1.02);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px) scale(1.01);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
     border-color: var(--accent-blue);
 }
 
@@ -1367,8 +1372,8 @@ body {
     width: 100%;
     height: 100%;
     background-color: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(8px) saturate(120%);
-    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    backdrop-filter: blur(4px) saturate(120%);
+    -webkit-backdrop-filter: blur(4px) saturate(120%);
     animation: fadeIn 0.2s ease;
 }
 
@@ -1378,27 +1383,28 @@ body {
 
 .modal-content {
     position: fixed;
-    right: 0;
-    top: 0;
-    height: 100%;
-    width: 90%;
-    max-width: 420px;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    max-height: 90vh;
     background-color: var(--bg-secondary);
     padding: 0;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.04);
     display: flex;
     flex-direction: column;
-    transform: translateX(100%);
+    transform: translateY(100%);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
 }
 
 .modal.show .modal-content {
-    transform: translateX(0);
+    transform: translateY(0);
 }
 
 .modal-header {
-    padding: 20px 28px;
+    padding: 16px 20px;
     border-bottom: 0.5px solid var(--border-lighter);
     display: flex;
     align-items: center;
@@ -1442,7 +1448,7 @@ body {
 
 .modal-body {
     flex: 1;
-    padding: 24px 28px;
+    padding: 20px 20px;
     overflow-y: auto;
 }
 
@@ -1906,6 +1912,32 @@ body {
     margin: 0;
 }
 
+/* Haptic Feedback Animation */
+@keyframes hapticPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9995); }
+    100% { transform: scale(1); }
+}
+
+.app.haptic-feedback {
+    animation: hapticPulse 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Prevent fixed elements from being affected by parent animations */
+.app.haptic-feedback .floating-add-btn {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+}
+
+.floating-add-btn:hover {
+    animation: none !important;
+}
+
+.floating-add-btn:active {
+    animation: none !important;
+}
+
 /* Accessibility */
 *:focus-visible {
     outline: 2px solid var(--accent-blue);
@@ -2093,9 +2125,12 @@ button, a {
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     padding: 0;
     gap: 2px;
+    transform-origin: center;
+    will-change: transform;
 }
 
-#detail-screen.active .floating-add-btn {
+/* Show floating button when detail screen is active */
+body:has(#detail-screen.active) .floating-add-btn {
     display: flex;
 }
 
@@ -2151,8 +2186,7 @@ button, a {
     }
 
     .modal-content {
-        margin: 25% auto;
-        padding: 24px;
+        max-height: 85vh;
     }
 
     .notification {

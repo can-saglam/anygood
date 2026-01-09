@@ -10,6 +10,7 @@ class AnygoodApp {
         this.searchEngine = new SearchEngine();
         this.aiFeatures = new AIFeatures();
         this.undoRedo = new UndoRedoManager();
+        this.urlParser = new URLParser();
 
         // Core data - load categories from storage or use defaults
         const savedCategories = this.storage.load('categories');
@@ -725,6 +726,50 @@ class AnygoodApp {
         if (input) {
             let debounceTimer;
             
+            // Handle paste events for immediate metadata extraction
+            input.addEventListener('paste', async (e) => {
+                const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                
+                if (!pastedText) return;
+                
+                // Check if pasted text is a URL
+                const detectedURL = this.urlParser.detectURL(pastedText);
+                const isURLResult = this.urlParser.isURL(pastedText.trim());
+                
+                if (detectedURL && isURLResult) {
+                    e.preventDefault(); // Prevent default paste
+                    
+                    // Set the URL in the input
+                    input.value = detectedURL;
+                    
+                    // Immediately fetch metadata and update preview
+                    try {
+                        const metadata = await this.fetchURLMetadata(detectedURL);
+                        
+                        if (metadata && !metadata.error) {
+                            // Update preview immediately with metadata
+                            const parsed = {
+                                title: metadata.title || detectedURL,
+                                description: metadata.description || null,
+                                link: detectedURL,
+                                author: null
+                            };
+                            
+                            // Auto-categorize based on URL and title
+                            const category = await this.aiFeatures.autoCategorize({ text: parsed.title });
+                            this.showPreview(parsed, category);
+                        } else {
+                            // If metadata fetch fails, still show preview with URL
+                            await this.updatePreview(detectedURL);
+                        }
+                    } catch (error) {
+                        console.error('URL metadata fetch error on paste:', error);
+                        // Fallback to normal preview update
+                        await this.updatePreview(detectedURL);
+                    }
+                }
+            });
+            
             // Handle input changes with debounce
             input.addEventListener('input', async (e) => {
                 const text = input.value.trim();
@@ -738,10 +783,10 @@ class AnygoodApp {
                     return;
                 }
                 
-                // Debounce parsing
+                // Debounce parsing (500ms for URLs to avoid unnecessary fetches)
                 debounceTimer = setTimeout(async () => {
                     await this.updatePreview(text);
-                }, 300);
+                }, 500);
             });
             
             // Handle Enter key - add from preview if visible, otherwise show preview
@@ -786,7 +831,41 @@ class AnygoodApp {
         }
         
         try {
-            // Parse natural language
+            // Check if text is a URL
+            const detectedURL = this.urlParser.detectURL(text);
+            
+            // Only try URL parsing if the ENTIRE text is a URL (not just contains a URL)
+            if (detectedURL && this.urlParser.isURL(text)) {
+                try {
+                    // Text is a URL - fetch metadata
+                    const metadata = await this.fetchURLMetadata(detectedURL);
+                    
+                    // Only use URL metadata if we got a valid title without errors
+                    if (metadata && metadata.title && !metadata.error) {
+                        // Successfully fetched metadata
+                        const parsed = {
+                            title: metadata.title,
+                            description: metadata.description || null,
+                            link: detectedURL,
+                            author: null
+                        };
+                        
+                        // Auto-categorize based on URL and title
+                        let category = await this.aiFeatures.autoCategorize({ text: metadata.title });
+                        
+                        // Show preview with metadata
+                        this.showPreview(parsed, category);
+                        return;
+                    }
+                    // If URL fetch failed, fall through to natural language parsing
+                    console.log('URL metadata fetch failed, falling back to natural language parsing');
+                } catch (urlError) {
+                    console.log('URL parsing error, falling back:', urlError);
+                    // Fall through to natural language parsing
+                }
+            }
+            
+            // Not a URL or metadata fetch failed - use natural language parsing
             const parsed = await this.aiFeatures.parseNaturalLanguage(text);
             
             if (!parsed.title) {
@@ -902,7 +981,6 @@ class AnygoodApp {
             input.focus();
             
             this.hideLoading();
-            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
             
         } catch (error) {
             this.hideLoading();
@@ -1204,7 +1282,6 @@ class AnygoodApp {
             this.updateCategoryCounts();
 
             this.hideLoading();
-            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
 
         } catch (error) {
             this.hideLoading();
@@ -1318,7 +1395,6 @@ class AnygoodApp {
             this.storage.save('collections', this.collections);
             this.renderDetail();
             this.renderOverview();
-            this.showNotification('Undone', 'success');
         }
     }
 
@@ -1331,7 +1407,6 @@ class AnygoodApp {
             this.storage.save('collections', this.collections);
             this.renderDetail();
             this.renderOverview();
-            this.showNotification('Redone', 'success');
         }
     }
 
@@ -1350,6 +1425,56 @@ class AnygoodApp {
             notification.classList.remove('show');
             setTimeout(() => notification.remove(), 300);
         }, 3000);
+    }
+
+    triggerHapticFeedback(intensity = 'light') {
+        // Try native Electron haptic feedback if available
+        if (window.electronAPI && window.electronAPI.triggerHaptic) {
+            window.electronAPI.triggerHaptic(intensity);
+        }
+        
+        // Fallback to web vibration API (works on mobile/touch devices)
+        if ('vibrate' in navigator) {
+            const patterns = {
+                light: 10,
+                medium: 20,
+                heavy: 30
+            };
+            navigator.vibrate(patterns[intensity] || 10);
+        }
+        
+        // Visual feedback - pulse the app container with CSS animation
+        const app = document.querySelector('.app');
+        if (app) {
+            app.classList.add('haptic-feedback');
+            setTimeout(() => {
+                app.classList.remove('haptic-feedback');
+            }, 160);
+        }
+        
+        // Audio feedback - subtle click sound
+        const audioContext = window.AudioContext || window.webkitAudioContext;
+        if (audioContext && !this.audioMuted) {
+            try {
+                const ctx = new audioContext();
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                
+                oscillator.frequency.value = 1000;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.08, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.03);
+                
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 0.03);
+            } catch (e) {
+                // Audio context not available or blocked
+            }
+        }
     }
 
     showLoading(message = 'Loading...') {
@@ -1609,6 +1734,20 @@ class AnygoodApp {
         const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
         const isDefaultCategory = defaultCategories.includes(this.currentCategory);
 
+        // Hide collections section entirely for custom categories
+        const collectionsSection = collectionsElement.closest('.section');
+        if (!isDefaultCategory) {
+            if (collectionsSection) {
+                collectionsSection.style.display = 'none';
+            }
+            return;
+        }
+
+        // Show collections section for default categories
+        if (collectionsSection) {
+            collectionsSection.style.display = 'block';
+        }
+
         // Filter out digest collections for user-created categories
         const filteredCollections = isDefaultCategory 
             ? collections 
@@ -1765,6 +1904,103 @@ class AnygoodApp {
         });
 
         const input = document.getElementById('item-input');
+        const linkInput = document.getElementById('item-link');
+        const descriptionInput = document.getElementById('item-description');
+        
+        let urlParseTimer;
+        
+        // Handle paste events for immediate metadata extraction
+        const handlePaste = async (e, targetInput) => {
+            // Get pasted text
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            
+            if (!pastedText) return;
+            
+            // Check if pasted text is a URL
+            const detectedURL = this.urlParser.detectURL(pastedText);
+            const isURLResult = this.urlParser.isURL(pastedText.trim());
+            
+            if (detectedURL && isURLResult) {
+                e.preventDefault(); // Prevent default paste
+                
+                // If pasting into link field, set it directly
+                if (targetInput === linkInput) {
+                    linkInput.value = detectedURL;
+                } else {
+                    // If pasting into title field, move URL to link field
+                    linkInput.value = detectedURL;
+                }
+                
+                // Immediately fetch metadata
+                try {
+                    const metadata = await this.fetchURLMetadata(detectedURL);
+                    
+                    if (metadata && !metadata.error) {
+                        // Populate title if available and field is empty or only contains the URL
+                        if (metadata.title && (targetInput === linkInput || !input.value || input.value === pastedText.trim())) {
+                            input.value = metadata.title;
+                        }
+                        
+                        // Populate description if available and field is empty
+                        if (metadata.description && !descriptionInput.value) {
+                            descriptionInput.value = metadata.description;
+                        }
+                    }
+                } catch (error) {
+                    console.error('URL metadata fetch error:', error);
+                    // If metadata fetch fails, still allow the paste
+                    if (targetInput === linkInput) {
+                        linkInput.value = detectedURL;
+                    }
+                }
+            }
+        };
+        
+        // Add paste listeners
+        linkInput.addEventListener('paste', (e) => handlePaste(e, linkInput));
+        input.addEventListener('paste', (e) => handlePaste(e, input));
+        
+        // Handle input changes with debounce for URL detection (fallback for typing URLs)
+        input.addEventListener('input', async (e) => {
+            const text = input.value.trim();
+            
+            // Clear existing timer
+            clearTimeout(urlParseTimer);
+            
+            // Skip if empty or link field already has value
+            if (!text || linkInput.value) return;
+            
+            // Debounce URL parsing
+            urlParseTimer = setTimeout(async () => {
+                // Check if text is a URL (must be ONLY a URL)
+                const detectedURL = this.urlParser.detectURL(text);
+                
+                if (detectedURL && this.urlParser.isURL(text)) {
+                    // Text is a URL - fetch metadata and populate fields
+                    try {
+                        const metadata = await this.fetchURLMetadata(detectedURL);
+                        
+                        // Only proceed if we got valid metadata without errors
+                        if (metadata && metadata.title && !metadata.error) {
+                            // Move URL to link field
+                            linkInput.value = detectedURL;
+                            
+                            // Replace title with fetched title
+                            input.value = metadata.title;
+                            
+                            // Populate description if available and field is empty
+                            if (metadata.description && !descriptionInput.value) {
+                                descriptionInput.value = metadata.description;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('URL metadata fetch error:', error);
+                        // Silently fail - user can continue typing
+                    }
+                }
+            }, 500);
+        });
+        
         input.addEventListener('keypress', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -1775,16 +2011,29 @@ class AnygoodApp {
         // Auto-detect if it's natural language
         input.addEventListener('blur', async () => {
             const text = input.value.trim();
-            if (text && text.length > 10 && !document.getElementById('item-link').value) {
-                const parsed = await this.aiFeatures.parseNaturalLanguage(text);
-                if (parsed.title && parsed.title !== text) {
-                    input.value = parsed.title;
-                    if (parsed.description) {
-                        document.getElementById('item-description').value = parsed.description;
+            if (text && text.length > 10 && !linkInput.value) {
+                // Check if it's a URL first
+                const detectedURL = this.urlParser.detectURL(text);
+                if (detectedURL && this.urlParser.isURL(text)) {
+                    // Already handled by input event, skip
+                    return;
+                }
+                
+                // Not a URL - try natural language parsing
+                try {
+                    const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+                    if (parsed.title && parsed.title !== text) {
+                        input.value = parsed.title;
+                        if (parsed.description) {
+                            descriptionInput.value = parsed.description;
+                        }
+                        if (parsed.link) {
+                            linkInput.value = parsed.link;
+                        }
                     }
-                    if (parsed.link) {
-                        document.getElementById('item-link').value = parsed.link;
-                    }
+                } catch (error) {
+                    console.error('Natural language parsing error:', error);
+                    // Silently fail - user input preserved
                 }
             }
         });
@@ -1838,7 +2087,6 @@ class AnygoodApp {
             this.renderDetail();
             this.updateCategoryCounts();
             this.closeModal();
-            this.showNotification('Item added', 'success');
 
             // Check for duplicates
             setTimeout(() => this.checkDuplicates(), 500);
@@ -1862,8 +2110,31 @@ class AnygoodApp {
             this.renderDetail();
             this.updateCategoryCounts();
             this.closeModal();
-            this.showNotification('Item added', 'success');
         }
+    }
+
+    async fetchURLMetadata(url) {
+        try {
+            // Check if electronAPI is available
+            if (typeof window.electronAPI === 'undefined' || !window.electronAPI.fetchURLMetadata) {
+                console.warn('electronAPI.fetchURLMetadata not available');
+                return { error: 'API not available' };
+            }
+
+            // Normalize URL
+            const normalizedURL = this.urlParser.normalizeURL(url);
+            
+            // Fetch metadata via IPC
+            const metadata = await window.electronAPI.fetchURLMetadata(normalizedURL);
+            
+            // Return metadata as-is (let caller handle errors)
+            return metadata;
+    } catch (error) {
+        console.error('fetchURLMetadata error:', error);
+        return { 
+            error: error.message
+        };
+    }
     }
 
     async extractMetadataForItem(item) {
@@ -1955,7 +2226,6 @@ class AnygoodApp {
         this.bulkMode = !this.bulkMode;
         this.selectedItems.clear();
         this.renderDetailItems();
-        this.showNotification(this.bulkMode ? 'Bulk mode enabled' : 'Bulk mode disabled', 'info');
     }
 
     selectAllItems() {
@@ -1976,7 +2246,6 @@ class AnygoodApp {
             this.bulkMode = false;
             this.renderDetail();
             this.updateCategoryCounts();
-            this.showNotification('Items deleted', 'success');
         }
     }
 
@@ -1988,7 +2257,6 @@ class AnygoodApp {
             this.storage.save('items', this.items);
             this.renderDetail();
             this.updateCategoryCounts();
-            this.showNotification('Item deleted', 'success');
         }
     }
 
@@ -2008,7 +2276,7 @@ class AnygoodApp {
     setActiveItem(itemId) {
         // Convert itemId to number to match item.id type (itemId comes as string from onclick handler)
         this.activeItemId = itemId ? (typeof itemId === 'string' ? parseFloat(itemId) : itemId) : null;
-        this.renderDetail();
+        this.renderDetailItems();
         // Focus the title input if activating
         if (this.activeItemId) {
             setTimeout(() => {
@@ -2045,6 +2313,9 @@ class AnygoodApp {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/html', event.target.outerHTML);
         event.currentTarget.classList.add('dragging');
+        
+        // Trigger haptic feedback
+        this.triggerHapticFeedback('light');
     }
 
     handleDragOver(event) {
@@ -2090,10 +2361,12 @@ class AnygoodApp {
         // Insert at new position
         items.splice(newIndex + 1, 0, draggedItem);
         
+        // Trigger haptic feedback
+        this.triggerHapticFeedback('light');
+        
         this.saveState();
         this.storage.save('items', this.items);
-        this.renderDetail();
-        this.showNotification('Item reordered', 'success');
+        this.renderDetailItems();
     }
 
     handleDragEnd(event) {
@@ -2158,7 +2431,6 @@ class AnygoodApp {
         this.closeModal();
         this.renderDetail();
         this.updateCategoryCounts();
-        this.showNotification('Item moved', 'success');
     }
 
     checkDuplicates() {
@@ -2181,7 +2453,6 @@ class AnygoodApp {
                 this.saveState();
                 this.storage.save('items', this.items);
                 this.renderDetail();
-                this.showNotification('Duplicates merged', 'success');
             }
         }
     }
@@ -2229,7 +2500,6 @@ class AnygoodApp {
             this.saveState();
             this.storage.save('collections', this.collections);
             this.renderDetail();
-            this.showNotification('Added to collection', 'success');
         }
         this.closeModal();
     }
@@ -2322,7 +2592,6 @@ class AnygoodApp {
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items to Anygood Digest`, 'success');
             } else {
                 this.hideLoading();
                 this.showNotification(`Could not fetch items from ${name}`, 'error');
@@ -2414,7 +2683,6 @@ class AnygoodApp {
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items${isRSSFeed ? ' to Anygood Digest' : ''}`, 'success');
             } else {
                 this.showNotification('Could not parse any items', 'error');
             }
@@ -2460,7 +2728,6 @@ class AnygoodApp {
             this.storage.save('collections', this.collections);
             this.renderDetail();
             this.closeModal();
-            this.showNotification('Collection created', 'success');
         }
     }
 
@@ -2495,7 +2762,6 @@ class AnygoodApp {
             this.saveState();
             this.storage.save('collections', this.collections);
             this.renderDetail();
-            this.showNotification('Collection deleted', 'success');
         }
     }
 
@@ -2529,7 +2795,6 @@ class AnygoodApp {
             this.saveState();
             this.storage.save('items', this.items);
             this.updateCategoryCounts();
-            this.showNotification('Item added to list', 'success');
             
             // If it's a digest item, animate removal
             if (isDigest) {
@@ -2685,7 +2950,6 @@ class AnygoodApp {
         this.storage.save('collections', this.collections);
         this.updateCategoryCounts();
         this.openCategory(category);
-        this.showNotification(`Imported ${imported} items`, 'success');
     }
 
     // Quick Add from Main View (now uses preview flow)
@@ -2710,15 +2974,36 @@ class AnygoodApp {
     // Category Management
     showAddCategoryModal() {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
 
-        modalBody.innerHTML = `
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
             <h2>Create New Category</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
+        // Set body content (without the h2 title since it's in header now)
+        modalBody.innerHTML = `
             <input type="text" id="category-name-input" placeholder="Category name..." autofocus>
-            <div style="margin-top: 12px;">
-                <label style="display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 0.85em;">Icon (emoji):</label>
-                <input type="text" id="category-icon-input" placeholder="📋" maxlength="2" style="font-size: 24px; text-align: center;">
-            </div>
             <div class="modal-buttons">
                 <button class="secondary" onclick="app.closeModal()">Cancel</button>
                 <button onclick="app.addCategory()">Create</button>
@@ -2738,10 +3023,9 @@ class AnygoodApp {
 
     addCategory() {
         const nameInput = document.getElementById('category-name-input');
-        const iconInput = document.getElementById('category-icon-input');
         
         const name = nameInput.value.trim();
-        const icon = iconInput.value.trim() || '📋';
+        const icon = '📋';
 
         if (!name) {
             this.showNotification('Please enter a category name', 'error');
@@ -2773,7 +3057,6 @@ class AnygoodApp {
 
         this.renderOverview();
         this.closeModal();
-        this.showNotification(`Category "${name}" created`, 'success');
     }
 
     addCategorySilently(slug, name) {
@@ -2835,7 +3118,6 @@ class AnygoodApp {
         this.storage.save('collections', this.collections);
 
         this.renderOverview();
-        this.showNotification('Category deleted', 'success');
     }
 
     toggleCompletedItems() {
@@ -2890,9 +3172,6 @@ class AnygoodApp {
                     this.saveState();
                     this.storage.save('collections', this.collections);
                     this.renderDetail();
-                    this.showNotification(`Added ${newItems.length} new items`, 'success');
-                } else {
-                    this.showNotification('No new items found', 'info');
                 }
             } else {
                 this.hideLoading();
