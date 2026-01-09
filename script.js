@@ -11,6 +11,11 @@ class AnygoodApp {
         this.aiFeatures = new AIFeatures();
         this.undoRedo = new UndoRedoManager();
         this.urlParser = new URLParser();
+        
+        // Initialize settings and services
+        this.authService = new AuthService();
+        this.syncService = new SyncService(this.authService, this.storage);
+        this.settings = new SettingsManager(this.storage, this.authService, this.syncService);
 
         // Core data - load categories from storage or use defaults
         const savedCategories = this.storage.load('categories');
@@ -117,6 +122,11 @@ class AnygoodApp {
 
         // Save initial state for undo
         this.saveState();
+
+        // Initialize async services
+        this.authService.init().catch(err => console.error('Auth init error:', err));
+        this.syncService.init().catch(err => console.error('Sync init error:', err));
+        this.settings.applySettings();
 
         this.init();
 
@@ -627,6 +637,7 @@ class AnygoodApp {
         this.setupElectronIPC();
         this.setupCategoryClicks();
         this.renderOverview();
+        this.renderKeyboardShortcuts('overview');
         this.checkForSharedData();
         this.updateCategoryCounts();
     }
@@ -1503,6 +1514,7 @@ class AnygoodApp {
         document.getElementById('overview-screen').classList.remove('active');
         document.getElementById('detail-screen').classList.add('active');
         this.renderDetail();
+        this.renderKeyboardShortcuts('detail');
     }
 
     closeCategory() {
@@ -1513,6 +1525,7 @@ class AnygoodApp {
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
+        this.renderKeyboardShortcuts('overview');
         // Focus input when returning to main view
         setTimeout(() => this.focusQuickAddInput(), 100);
     }
@@ -1563,6 +1576,39 @@ class AnygoodApp {
 
     updateCategoryCounts() {
         this.renderOverview();
+    }
+
+    renderKeyboardShortcuts(context = 'overview') {
+        const shortcutsBar = document.querySelector('.keyboard-shortcuts-bar');
+        if (!shortcutsBar) return;
+
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const modKey = isMac ? '⌘' : 'Ctrl';
+
+        let shortcuts = [];
+
+        if (context === 'overview') {
+            shortcuts = [
+                { keys: [`${modKey}`, 'N'], desc: 'New Category' },
+                { keys: [`${modKey}`, 'Z'], desc: 'Undo' },
+                { keys: [`${modKey}`, '⇧', 'Z'], desc: 'Redo' },
+                { keys: ['Esc'], desc: 'Close' }
+            ];
+        } else if (context === 'detail') {
+            shortcuts = [
+                { keys: [`${modKey}`, 'N'], desc: 'New Item' },
+                { keys: [`${modKey}`, 'Z'], desc: 'Undo' },
+                { keys: [`${modKey}`, '⇧', 'Z'], desc: 'Redo' },
+                { keys: ['←'], desc: 'Back' }
+            ];
+        }
+
+        const shortcutsHTML = shortcuts.map(shortcut => {
+            const keysHTML = shortcut.keys.map(key => `<kbd>${key}</kbd>`).join('');
+            return `<div class="shortcut-hint">${keysHTML} <span class="shortcut-desc">${shortcut.desc}</span></div>`;
+        }).join('');
+
+        shortcutsBar.innerHTML = shortcutsHTML;
     }
 
     renderDetail() {
