@@ -42,8 +42,9 @@ class AnygoodApp {
         // Suggested sources
         this.suggestedSources = {
             read: [
+                { name: 'The Guardian Books', url: 'https://www.theguardian.com/books/rss', type: 'rss' },
                 { name: 'London Review of Books', url: 'https://www.lrb.co.uk/feed', type: 'rss' },
-                { name: 'The Quietus - Books', url: 'https://thequietus.com/feed', type: 'rss' }
+                { name: 'Literary Hub', url: 'https://lithub.com/feed/', type: 'rss' }
             ],
             listen: [
                 { name: 'Resident Advisor Events', url: 'https://ra.co/xml/eventlistings.xml', type: 'rss' },
@@ -51,16 +52,19 @@ class AnygoodApp {
                 { name: 'Pitchfork Reviews', url: 'https://pitchfork.com/rss/reviews/albums/', type: 'rss' }
             ],
             watch: [
-                { name: 'BFI Film Releases', url: 'https://whatson.bfi.org.uk/Online/default.asp', type: 'list' },
-                { name: 'Little White Lies', url: 'https://lwlies.com/feed/', type: 'rss' }
+                { name: 'Little White Lies', url: 'https://lwlies.com/feed/', type: 'rss' },
+                { name: 'The Guardian Film', url: 'https://www.theguardian.com/film/rss', type: 'rss' },
+                { name: 'BFI', url: 'https://www.bfi.org.uk/rss', type: 'rss' }
             ],
             eat: [
                 { name: 'Hot Dinners London', url: 'https://www.hot-dinners.com/feed', type: 'rss' },
-                { name: 'London Eater', url: 'https://london.eater.com/rss/index.xml', type: 'rss' }
+                { name: 'London Eater', url: 'https://london.eater.com/rss/index.xml', type: 'rss' },
+                { name: 'Timeout London Food', url: 'https://www.timeout.com/london/restaurants/rss.xml', type: 'rss' }
             ],
             do: [
                 { name: 'Londonist Events', url: 'https://londonist.com/feed', type: 'rss' },
-                { name: 'Time Out London', url: 'https://www.timeout.com/london/feed', type: 'rss' }
+                { name: 'Time Out London', url: 'https://www.timeout.com/london/feed', type: 'rss' },
+                { name: 'Eventbrite London', url: 'https://www.eventbrite.co.uk/rss/london', type: 'rss' }
             ]
         };
 
@@ -71,25 +75,15 @@ class AnygoodApp {
             this.storage.save('items', this.items);
             this.storage.save('collections', this.collections);
         } else {
-            // Ensure each category has at least an empty Anygood Digest collection if collections are empty
+            // Ensure each default category has at least an empty Anygood Digest collection if collections are empty
+            // Only create digest for default categories, not user-created ones
+            const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
             this.categories.forEach(cat => {
-                if (!this.collections[cat] || this.collections[cat].length === 0) {
-                    // Create empty Anygood Digest collection
-                    this.collections[cat] = [{
-                        id: Date.now(),
-                        name: 'Anygood Digest',
-                        digest: true,
-                        expanded: true,
-                        lastUpdated: Date.now(),
-                        sourceUrl: null,
-                        items: []
-                    }];
-                    this.storage.save('collections', this.collections);
-                } else {
-                    // Check if Anygood Digest exists, if not add it
-                    const hasDigest = this.collections[cat].some(c => c.name === 'Anygood Digest' && c.digest);
-                    if (!hasDigest) {
-                        this.collections[cat].unshift({
+                // Only create digest for default categories
+                if (defaultCategories.includes(cat)) {
+                    if (!this.collections[cat] || this.collections[cat].length === 0) {
+                        // Create empty Anygood Digest collection
+                        this.collections[cat] = [{
                             id: Date.now(),
                             name: 'Anygood Digest',
                             digest: true,
@@ -97,8 +91,23 @@ class AnygoodApp {
                             lastUpdated: Date.now(),
                             sourceUrl: null,
                             items: []
-                        });
+                        }];
                         this.storage.save('collections', this.collections);
+                    } else {
+                        // Check if Anygood Digest exists, if not add it
+                        const hasDigest = this.collections[cat].some(c => c.name === 'Anygood Digest' && c.digest);
+                        if (!hasDigest) {
+                            this.collections[cat].unshift({
+                                id: Date.now(),
+                                name: 'Anygood Digest',
+                                digest: true,
+                                expanded: true,
+                                lastUpdated: Date.now(),
+                                sourceUrl: null,
+                                items: []
+                            });
+                            this.storage.save('collections', this.collections);
+                        }
                     }
                 }
             });
@@ -108,6 +117,15 @@ class AnygoodApp {
         this.saveState();
 
         this.init();
+
+        // Auto-populate recommendations in background (only if empty)
+        // Don't await - let it run asynchronously
+        setTimeout(() => {
+            this.autoPopulateRecommendations().catch(err => {
+                // Silently handle errors - this is background operation
+                console.log('Auto-populate recommendations error:', err);
+            });
+        }, 1000);
     }
 
     isFirstRun() {
@@ -696,12 +714,191 @@ class AnygoodApp {
     setupQuickAdd() {
         const input = document.getElementById('quick-add-input');
         if (input) {
-            input.addEventListener('keypress', (e) => {
+            let debounceTimer;
+            
+            // Handle input changes with debounce
+            input.addEventListener('input', async (e) => {
+                const text = input.value.trim();
+                
+                // Clear existing timer
+                clearTimeout(debounceTimer);
+                
+                // Hide preview if input is empty
+                if (!text) {
+                    this.hidePreview();
+                    return;
+                }
+                
+                // Debounce parsing
+                debounceTimer = setTimeout(async () => {
+                    await this.updatePreview(text);
+                }, 300);
+            });
+            
+            // Handle Enter key - add from preview if visible, otherwise show preview
+            input.addEventListener('keypress', async (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    this.quickAddFromMain();
+                    const preview = document.getElementById('input-preview');
+                    if (preview && preview.style.display !== 'none') {
+                        this.addFromPreview();
+                    } else {
+                        const text = input.value.trim();
+                        if (text) {
+                            await this.updatePreview(text);
+                        }
+                    }
                 }
             });
+            
+            // Hide preview when input loses focus (with delay to allow button clicks)
+            input.addEventListener('blur', (e) => {
+                setTimeout(() => {
+                    const preview = document.getElementById('input-preview');
+                    if (!preview) return;
+                    
+                    // Check if focus moved to preview or its children
+                    const activeElement = document.activeElement;
+                    const isFocusInPreview = preview.contains(activeElement);
+                    const isHoveringPreview = preview.matches(':hover');
+                    
+                    if (!isFocusInPreview && !isHoveringPreview) {
+                        this.hidePreview();
+                    }
+                }, 200);
+            });
+        }
+    }
+    
+    async updatePreview(text) {
+        if (!text || text.trim().length === 0) {
+            this.hidePreview();
+            return;
+        }
+        
+        try {
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            if (!parsed.title) {
+                this.hidePreview();
+                return;
+            }
+            
+            // Determine category
+            let category = parsed.category;
+            if (!category) {
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
+            }
+            
+            // Show preview
+            this.showPreview(parsed, category);
+        } catch (error) {
+            console.error('Preview update error:', error);
+            this.hidePreview();
+        }
+    }
+    
+    showPreview(parsed, detectedCategory) {
+        const preview = document.getElementById('input-preview');
+        const previewTitle = document.getElementById('preview-title');
+        const categorySelector = document.getElementById('preview-category-selector');
+        
+        if (!preview || !previewTitle || !categorySelector) return;
+        
+        // Update title
+        previewTitle.textContent = parsed.title;
+        
+        // Populate category selector
+        categorySelector.innerHTML = '';
+        this.categories.forEach(cat => {
+            const metadata = this.categoryMetadata[cat] || { name: cat };
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = metadata.name;
+            option.selected = cat === detectedCategory;
+            categorySelector.appendChild(option);
+        });
+        
+        // Show preview with animation
+        preview.style.display = 'block';
+        requestAnimationFrame(() => {
+            preview.classList.add('preview-visible');
+        });
+    }
+    
+    hidePreview() {
+        const preview = document.getElementById('input-preview');
+        if (preview) {
+            preview.classList.remove('preview-visible');
+            setTimeout(() => {
+                preview.style.display = 'none';
+            }, 200);
+        }
+    }
+    
+    async addFromPreview() {
+        const input = document.getElementById('quick-add-input');
+        const previewTitle = document.getElementById('preview-title');
+        const categorySelector = document.getElementById('preview-category-selector');
+        
+        if (!input || !previewTitle || !categorySelector) return;
+        
+        const text = input.value.trim();
+        if (!text) return;
+        
+        try {
+            this.showLoading('Processing...');
+            
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            // Get selected category
+            const category = categorySelector.value || parsed.category;
+            
+            // Ensure category exists
+            if (!this.categories.includes(category)) {
+                this.addCategorySilently(category, parsed.title || text);
+            }
+            
+            // Create item
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || text,
+                completed: false
+            };
+            
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+            
+            // Generate tags
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+            
+            // Add to category
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+            
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+            
+            // Clear input and hide preview
+            input.value = '';
+            this.hidePreview();
+            input.focus();
+            
+            this.hideLoading();
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+            
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Add from preview error:', error);
         }
     }
 
@@ -780,25 +977,113 @@ class AnygoodApp {
 
     looksLikeCode(text) {
         // Skip if it looks like code (has lots of special characters, brackets, etc.)
+        const trimmed = text.trim();
         const codePatterns = [
             /^[a-zA-Z0-9_$]+\s*[=:]\s*/,  // Variable assignments
             /^[{}[\]]+/,  // Brackets
-            /^(\/\/|\/\*|#|<!--)/,  // Comments
-            /^function\s*\(|^const\s+\w+\s*=|^let\s+\w+\s*=|^var\s+\w+\s*=/,  // Code patterns
-            /\n.*\{.*\}/,  // Code blocks
+            /^(\/\/|\/\*|#|<!--|```|~~)/,  // Comments and code blocks
+            /^function\s*\(|^const\s+\w+\s*=|^let\s+\w+\s*=|^var\s+\w+\s*=|^class\s+\w+|^import\s+|^export\s+/,  // Code patterns
+            /\n.*\{.*\}/,  // Code blocks with braces
+            /<[a-z]+[^>]*>.*<\/[a-z]+>/i,  // HTML tags
+            /^\s*(if|for|while|switch|case|def|import|from|require)\s*\(?/,  // Code keywords
+            /\/\/.*|\/\*[\s\S]*?\*\//,  // Comments
+            /```[\s\S]*?```/,  // Code fences
         ];
         
-        return codePatterns.some(pattern => pattern.test(text.trim()));
+        // Check for method calls (but exclude URLs)
+        const urlPattern = /^https?:\/\//i;
+        if (!urlPattern.test(trimmed) && /^\w+\.\w+\(/.test(trimmed)) {
+            return true;
+        }
+        
+        // Check if it has too many code-like characters
+        const codeCharCount = (trimmed.match(/[{}[\]();=<>]/g) || []).length;
+        const totalChars = trimmed.length;
+        const codeCharRatio = totalChars > 0 ? codeCharCount / totalChars : 0;
+        
+        // If more than 10% are code characters and no URLs, likely code
+        if (codeCharRatio > 0.1 && !/https?:\/\//.test(trimmed)) {
+            return true;
+        }
+        
+        return codePatterns.some(pattern => pattern.test(trimmed));
     }
 
     isAddableContent(text, parsed) {
-        // Check if it looks like a title, URL, or structured content
-        const hasUrl = /https?:\/\/[^\s]+/.test(text);
-        const hasTitle = parsed.title && parsed.title.length > 3;
-        const hasCategory = parsed.category !== null;
-        const looksLikeItem = text.length > 5 && text.length < 200;
+        const trimmed = text.trim();
+        
+        // Skip if too short or too long
+        if (trimmed.length < 5 || trimmed.length > 300) {
+            return false;
+        }
 
-        return (hasUrl || hasTitle || hasCategory) && looksLikeItem;
+        // Enhanced URL detection - support various URL patterns
+        const urlPatterns = [
+            /https?:\/\/[^\s]+/i,  // HTTP/HTTPS URLs
+            /www\.\w+\.\w+[^\s]*/i,  // www URLs
+            /[\w\-]+\.(com|org|net|io|co|uk|edu|gov|me|app|dev)[^\s]*/i,  // Domain patterns
+        ];
+        const hasUrl = urlPatterns.some(pattern => pattern.test(trimmed));
+
+        // Enhanced title detection patterns
+        const titlePatterns = [
+            // Book titles with "by" author
+            /^["'"]?[^"'"\n]{10,}["'"]?\s+by\s+[A-Z][a-zA-Z\s]+$/i,
+            // Movie/show titles with year
+            /^[A-Z][^0-9]{10,}\s*\(\d{4}\)/i,
+            // Titles in quotes
+            /^["'"]([^"'"\n]{10,})["'"]$/,
+            // ISBN patterns
+            /\b(ISBN[- ]*(13|10)?[: ]*)?([0-9]{9,13}[0-9X])\b/i,
+            // IMDB IDs
+            /tt\d{7,8}/i,
+            // Spotify URIs
+            /spotify:(track|album|artist|playlist):[a-zA-Z0-9]+/i,
+            // Article/blog titles (sentence case, reasonable length)
+            /^[A-Z][^.!?]{20,}[a-z]$/,
+        ];
+        const looksLikeTitle = titlePatterns.some(pattern => pattern.test(trimmed)) ||
+                              (parsed.title && parsed.title.length > 3 && parsed.title !== trimmed);
+
+        // Media identifiers
+        const mediaIndicators = [
+            /\b(ISBN|IMDB|Spotify|Apple Music|YouTube|Netflix|Hulu|Disney\+)\b/i,
+            /^watch\s+/i,
+            /^read\s+/i,
+            /^listen\s+to\s+/i,
+            /\b(movie|film|book|album|song|podcast|series|show|episode)\b/i,
+        ];
+        const hasMediaIndicator = mediaIndicators.some(pattern => pattern.test(trimmed));
+
+        // Restaurant/place indicators
+        const placeIndicators = [
+            /\b(restaurant|cafe|bar|bistro|diner|eatery|food|cuisine|menu)\b/i,
+            /\d+\s+[A-Z][a-z]+\s+(Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Boulevard|Blvd)/i,
+        ];
+        const looksLikePlace = placeIndicators.some(pattern => pattern.test(trimmed));
+
+        // Check parsed results
+        const hasParsedTitle = parsed.title && parsed.title.length > 5 && parsed.title !== trimmed;
+        const hasCategory = parsed.category !== null;
+        const hasParsedLink = parsed.link && parsed.link.length > 0;
+
+        // Exclude common non-consumable patterns
+        const excludePatterns = [
+            /^(error|warning|debug|log|console|exception)/i,
+            /^\d{1,2}:\d{2}(\s*(AM|PM))?$/i,  // Time only
+            /^\d{4}-\d{2}-\d{2}$/,  // Date only
+            /^[\d\s\+\-\(\)]+$/,  // Phone numbers or numbers only
+            /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i,  // Email only (without context)
+        ];
+        const shouldExclude = excludePatterns.some(pattern => pattern.test(trimmed));
+
+        if (shouldExclude) {
+            return false;
+        }
+
+        // Must have at least one indicator of consumable content
+        return (hasUrl || hasParsedLink || looksLikeTitle || hasParsedTitle || hasMediaIndicator || looksLikePlace || hasCategory) &&
+               !this.looksLikeCode(trimmed);
     }
 
     showClipboardSuggestion(clipboardText, parsed) {
@@ -1242,15 +1527,22 @@ class AnygoodApp {
         if (!collectionsElement) return;
 
         const collections = this.collections[this.currentCategory] || [];
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const isDefaultCategory = defaultCategories.includes(this.currentCategory);
 
-        if (collections.length === 0) {
+        // Filter out digest collections for user-created categories
+        const filteredCollections = isDefaultCategory 
+            ? collections 
+            : collections.filter(c => !c.digest);
+
+        if (filteredCollections.length === 0) {
             collectionsElement.innerHTML = '<div class="empty-state">No collections yet</div>';
             return;
         }
 
         // Separate digest collections from regular collections
-        const digestCollections = collections.filter(c => c.digest);
-        const regularCollections = collections.filter(c => !c.digest);
+        const digestCollections = filteredCollections.filter(c => c.digest);
+        const regularCollections = filteredCollections.filter(c => !c.digest);
 
         // Sort digest collections by last updated (newest first)
         digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
@@ -1259,7 +1551,7 @@ class AnygoodApp {
         const sortedCollections = [...digestCollections, ...regularCollections];
 
         collectionsElement.innerHTML = sortedCollections.map((collection, collectionIndex) => {
-            const actualIndex = collections.indexOf(collection);
+            const actualIndex = filteredCollections.indexOf(collection);
             const isDigest = collection.digest;
             const lastUpdated = collection.lastUpdated ? this.rssParser.formatRelativeTime(new Date(collection.lastUpdated).toISOString()) : null;
             
@@ -1269,45 +1561,64 @@ class AnygoodApp {
                     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                         <button class="collection-toggle" onclick="app.toggleCollection(${actualIndex})" aria-label="Toggle collection">▸</button>
                         <span class="collection-name">
-                            ${isDigest ? '<span class="badge-digest">📰</span>' : ''}
-                            ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
+                            ${!isDigest && collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
-                            ${isDigest ? '<span class="badge-live">LIVE</span>' : ''}
                         </span>
                         ${lastUpdated ? `<span class="collection-updated">Updated ${lastUpdated}</span>` : ''}
                     </div>
                     <div class="collection-actions">
-                        <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
+                        ${!isDigest ? `<span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>` : ''}
                         ${isDigest ? `<button class="refresh-btn" onclick="app.refreshDigest(${actualIndex})" title="Refresh feed" aria-label="Refresh feed">↻</button>` : ''}
-                        <button onclick="app.deleteCollection(${actualIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
+                        ${!isDigest ? `<button onclick="app.deleteCollection(${actualIndex})" title="Delete" aria-label="Delete collection">🗑️</button>` : ''}
                     </div>
                 </div>
-                <div class="collection-items">
+                <div class="collection-items ${isDigest ? 'digest-items-horizontal' : ''}">
                     ${collection.items.length === 0 ?
                         '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
                         collection.items.map((item, itemIndex) => {
-                            const hasMetadata = item.description || item.link || item.pubDate || item.source;
-                            const itemDate = item.pubDate ? this.rssParser.formatRelativeTime(item.pubDate) : null;
+                            const hasMetadata = item.description || item.link || (!isDigest && (item.pubDate || item.source));
+                            // Summarize description for digest items
+                            const displayDescription = isDigest && item.description 
+                                ? this.aiFeatures.summarizeDescription(item.description, 80)
+                                : item.description;
+                            
+                            // Get favicon URL for digest items
+                            let faviconUrl = null;
+                            if (isDigest && item.link) {
+                                try {
+                                    const domain = new URL(item.link).hostname;
+                                    faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+                                } catch (e) {
+                                    // Invalid URL, skip favicon
+                                }
+                            }
+                            
+                            // For non-digest items, show date and source as before
+                            const itemDate = !isDigest && item.pubDate ? this.rssParser.formatRelativeTime(item.pubDate) : null;
                             
                             return `
-                                <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
+                                <div class="collection-item ${isDigest ? 'digest-item-card' : ''} ${hasMetadata ? 'has-metadata' : ''}" 
+                                     data-collection-item-id="${item.id || itemIndex}" 
+                                     data-collection-index="${actualIndex}" 
+                                     data-item-index="${itemIndex}">
                                     <div class="collection-item-content">
                                         <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
-                                        ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                                        ${displayDescription ? `<div class="collection-item-description" title="${this.escapeHtml(item.description || '')}">${this.escapeHtml(displayDescription)}</div>` : ''}
                                         <div class="collection-item-meta">
-                                            ${item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
+                                            ${!isDigest && item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
                                             ${itemDate ? `<span class="item-date">${itemDate}</span>` : ''}
                                             ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
-                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                ${isDigest && faviconUrl ? `<img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">` : ''}
+                                                ${!isDigest ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                                </svg>
+                                                </svg>` : ''}
                                                 ${this.escapeHtml(new URL(item.link).hostname)}
                                             </a>` : ''}
                                         </div>
                                     </div>
                                     <div class="collection-item-actions">
                                         <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
-                                        <button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>
+                                        ${!isDigest ? `<button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>` : ''}
                                     </div>
                                 </div>
                             `;
@@ -1862,13 +2173,40 @@ class AnygoodApp {
     }
 
     toggleCollection(collectionIndex) {
-        const collection = this.collections[this.currentCategory][collectionIndex];
-        collection.expanded = !collection.expanded;
+        const collections = this.collections[this.currentCategory] || [];
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const isDefaultCategory = defaultCategories.includes(this.currentCategory);
+        
+        // Filter collections same way as in renderDetailCollections
+        const filteredCollections = isDefaultCategory 
+            ? collections 
+            : collections.filter(c => !c.digest);
+        
+        // Separate digest and regular collections
+        const digestCollections = filteredCollections.filter(c => c.digest);
+        const regularCollections = filteredCollections.filter(c => !c.digest);
+        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+        const sortedCollections = [...digestCollections, ...regularCollections];
+        
+        // Get collection from sorted list
+        const collection = sortedCollections[collectionIndex];
+        if (!collection) return;
+        
+        // Find actual index in original collections array
+        const actualIndex = collections.findIndex(c => c.id === collection.id);
+        if (actualIndex === -1) return;
+        
+        collections[actualIndex].expanded = !collections[actualIndex].expanded;
         this.storage.save('collections', this.collections);
         this.renderDetail();
     }
 
     deleteCollection(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (collection && collection.digest) {
+            this.showNotification('Cannot delete Anygood Digest collection', 'error');
+            return;
+        }
         if (confirm('Delete this collection?')) {
             this.collections[this.currentCategory].splice(collectionIndex, 1);
             this.saveState();
@@ -1879,6 +2217,11 @@ class AnygoodApp {
     }
 
     deleteCollectionItem(collectionIndex, itemIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (collection && collection.digest) {
+            // Cannot delete items from digest collections
+            return;
+        }
         this.collections[this.currentCategory][collectionIndex].items.splice(itemIndex, 1);
         this.saveState();
         this.storage.save('collections', this.collections);
@@ -1886,14 +2229,55 @@ class AnygoodApp {
     }
 
     addCollectionItemToMain(collectionIndex, itemIndex) {
-        const collectionItem = this.collections[this.currentCategory][collectionIndex].items[itemIndex];
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        const collectionItem = collection.items[itemIndex];
+        const isDigest = collection.digest;
+        
         if (!this.items[this.currentCategory].find(i => i.id === collectionItem.id)) {
-            this.items[this.currentCategory].push({ ...collectionItem, completed: false });
+            // Create item copy
+            const newItem = { ...collectionItem, completed: false };
+            
+            // If it's from digest and has a description, summarize it
+            if (isDigest && newItem.description) {
+                newItem.description = this.aiFeatures.summarizeDescription(newItem.description, 100);
+            }
+            
+            this.items[this.currentCategory].push(newItem);
             this.saveState();
             this.storage.save('items', this.items);
-            this.renderDetail();
             this.updateCategoryCounts();
             this.showNotification('Item added to list', 'success');
+            
+            // If it's a digest item, animate removal
+            if (isDigest) {
+                const itemElement = document.querySelector(
+                    `.collection-item[data-collection-index="${collectionIndex}"][data-item-index="${itemIndex}"]`
+                );
+                
+                if (itemElement) {
+                    // Add animation class
+                    itemElement.classList.add('moving-out');
+                    
+                    // Remove item after animation completes
+                    setTimeout(() => {
+                        // Remove from collection
+                        collection.items.splice(itemIndex, 1);
+                        this.saveState();
+                        this.storage.save('collections', this.collections);
+                        // Re-render to update UI
+                        this.renderDetail();
+                    }, 400); // Match the animation duration + small delay
+                } else {
+                    // Fallback: remove immediately if element not found
+                    collection.items.splice(itemIndex, 1);
+                    this.saveState();
+                    this.storage.save('collections', this.collections);
+                    this.renderDetail();
+                }
+            } else {
+                // For non-digest items, just re-render
+                this.renderDetail();
+            }
         }
     }
 
@@ -2018,71 +2402,22 @@ class AnygoodApp {
         this.showNotification(`Imported ${imported} items`, 'success');
     }
 
-    // Quick Add from Main View
+    // Quick Add from Main View (now uses preview flow)
     async quickAddFromMain() {
+        // This function is kept for backward compatibility
+        // The actual add logic is now in addFromPreview()
         const input = document.getElementById('quick-add-input');
         if (!input) return;
 
         const text = input.value.trim();
         if (!text) return;
 
-        try {
-            this.showLoading('Processing...');
-            
-            // Parse natural language
-            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
-            
-            // Determine category
-            let category = parsed.category;
-            if (!category) {
-                // Auto-categorize
-                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
-            }
-
-            // Ensure category exists
-            if (!this.categories.includes(category)) {
-                // Create category if it doesn't exist
-                this.addCategorySilently(category, parsed.title || text);
-            }
-
-            // Create item
-            const newItem = {
-                id: Date.now(),
-                text: parsed.title || text,
-                completed: false
-            };
-
-            if (parsed.description) newItem.description = parsed.description;
-            if (parsed.link) {
-                newItem.link = parsed.link;
-                // Extract metadata in background
-                setTimeout(() => this.extractMetadataForItem(newItem), 100);
-            }
-            if (parsed.author) newItem.author = parsed.author;
-
-            // Generate tags
-            const tags = this.aiFeatures.generateTags(newItem);
-            if (tags.length > 0) newItem.tags = tags;
-
-            // Add to category
-            if (!this.items[category]) this.items[category] = [];
-            this.items[category].push(newItem);
-
-            this.saveState();
-            this.storage.save('items', this.items);
-            this.updateCategoryCounts();
-
-            // Clear input
-            input.value = '';
-            input.focus();
-
-            this.hideLoading();
-            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
-
-        } catch (error) {
-            this.hideLoading();
-            this.showNotification(`Error: ${error.message}`, 'error');
-            console.error('Quick add error:', error);
+        // Show preview first, or add directly if preview is visible
+        const preview = document.getElementById('input-preview');
+        if (preview && preview.style.display !== 'none') {
+            this.addFromPreview();
+        } else {
+            await this.updatePreview(text);
         }
     }
 
@@ -2277,6 +2612,67 @@ class AnygoodApp {
         } catch (error) {
             this.hideLoading();
             this.showNotification(`Refresh failed: ${error.message}`, 'error');
+        }
+    }
+
+    async autoPopulateRecommendations() {
+        // Only populate if digest collections are empty (don't overwrite existing data)
+        // This runs silently in the background
+        // Only populate for default categories, not user-created ones
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        for (const category of this.categories) {
+            // Skip user-created categories
+            if (!defaultCategories.includes(category)) continue;
+            
+            const collections = this.collections[category] || [];
+            const digestCollection = collections.find(c => c.name === 'Anygood Digest' && c.digest);
+            
+            // Only populate if digest collection exists and is empty
+            if (digestCollection && (!digestCollection.items || digestCollection.items.length === 0)) {
+                const sources = this.suggestedSources[category] || [];
+                
+                // Try to populate from the first available RSS source
+                for (const source of sources) {
+                    if (source.type === 'rss' && source.url) {
+                        try {
+                            const items = await this.rssParser.parseURL(source.url);
+                            
+                            if (items && items.length > 0) {
+                                // Add items to digest collection
+                                const newItems = items.slice(0, 20).map(item => {
+                                    const itemObj = {
+                                        id: Date.now() + Math.random(),
+                                        text: item.title || item,
+                                        completed: false,
+                                        source: source.name,
+                                        sourceUrl: source.url,
+                                        importedAt: Date.now()
+                                    };
+                                    
+                                    if (item.description) itemObj.description = item.description;
+                                    if (item.link) itemObj.link = item.link;
+                                    if (item.pubDate) itemObj.pubDate = item.pubDate;
+                                    
+                                    return itemObj;
+                                });
+
+                                digestCollection.items = newItems;
+                                digestCollection.lastUpdated = Date.now();
+                                digestCollection.sourceUrl = source.url;
+                                
+                                this.storage.save('collections', this.collections);
+                                
+                                // Only populate from first successful source per category
+                                break;
+                            }
+                        } catch (error) {
+                            // Silently fail - try next source or skip category
+                            console.log(`Failed to auto-populate from ${source.name}:`, error.message);
+                            continue;
+                        }
+                    }
+                }
+            }
         }
     }
 

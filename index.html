@@ -23,11 +23,21 @@
                        placeholder="Type anything... e.g., 'Read The Creative Act by Rick Rubin' or 'Watch Past Lives'"
                        autocomplete="off"
                        aria-label="Quick add item using natural language">
-                <button class="quick-add-btn" onclick="app.quickAddFromMain()" title="Add item" aria-label="Add item">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </button>
+            </div>
+            
+            <!-- Input Preview -->
+            <div id="input-preview" class="input-preview" style="display: none;">
+                <div class="preview-card">
+                    <div class="preview-content">
+                        <div class="preview-title" id="preview-title"></div>
+                        <select id="preview-category-selector" class="preview-category-selector"></select>
+                    </div>
+                    <button class="preview-add-btn" onclick="app.addFromPreview()" title="Add item" aria-label="Add item">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div class="category-grid" id="category-grid">
@@ -88,7 +98,7 @@
                             <path d="M14 14V17H2V14H0V17C0 18.1 0.9 19 2 19H14C15.1 19 16 18.1 16 17V14H14ZM13 7L11.59 5.59L9 8.17V0H7V8.17L4.41 5.59L3 7L8 12L13 7Z" fill="currentColor"/>
                         </svg>
                     </button>
-                    <button class="add-btn" onclick="app.showAddItemModal()">
+                    <button class="add-btn header-add-btn" onclick="app.showAddItemModal()" style="display: none;">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                         </svg>
@@ -117,6 +127,14 @@
                     <div class="items-list" id="detail-items-list"></div>
                 </div>
             </div>
+
+            <!-- Floating Add Button -->
+            <button class="floating-add-btn" onclick="app.showAddItemModal()" title="Add new item (Cmd+N)" aria-label="Add new item">
+                <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="floating-add-hint">cmd + n</span>
+            </button>
         </div>
     </div>
 

@@ -36,19 +36,21 @@ const mb = menubar({
 mb.on('ready', () => {
   console.log('anygood is ready in menu bar');
 
-  // Global keyboard shortcut: Cmd+A to open Anygood
+  // Global keyboard shortcut: Cmd+Shift+A to open Anygood
   // Note: On macOS, this may require accessibility permissions
   const { globalShortcut, app } = require('electron');
   
   const registerShortcut = () => {
-    // Use platform-specific shortcut (Command+A on macOS, Ctrl+A elsewhere)
-    const shortcut = process.platform === 'darwin' ? 'Command+A' : 'CommandOrControl+A';
+    // Use platform-specific shortcut (Command+Shift+A on macOS, Ctrl+Shift+A elsewhere)
+    const shortcut = process.platform === 'darwin' ? 'Command+Shift+A' : 'CommandOrControl+Shift+A';
     // Try to unregister first in case it's already registered
     globalShortcut.unregister(shortcut);
-    globalShortcut.unregister('CommandOrControl+A'); // Also unregister generic version
+    globalShortcut.unregister('CommandOrControl+Shift+A'); // Also unregister generic version
+    globalShortcut.unregister('Command+A'); // Unregister old shortcut
+    globalShortcut.unregister('CommandOrControl+A'); // Also unregister old generic version
     
     const registered = globalShortcut.register(shortcut, () => {
-      console.log('Cmd+A pressed - toggling Anygood');
+      console.log('Cmd+Shift+A pressed - toggling Anygood');
       if (mb.window && mb.window.isVisible()) {
         mb.hideWindow();
       } else {
@@ -66,10 +68,10 @@ mb.on('ready', () => {
     });
     
     if (!registered) {
-      console.log('Failed to register Cmd+A shortcut. It may be in use by another app.');
+      console.log('Failed to register Cmd+Shift+A shortcut. It may be in use by another app.');
       console.log('Note: On macOS, you may need to grant accessibility permissions.');
     } else {
-      console.log('Cmd+A shortcut registered successfully');
+      console.log('Cmd+Shift+A shortcut registered successfully');
     }
   };
 
@@ -85,7 +87,7 @@ mb.on('ready', () => {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: 'Open Anygood',
-      accelerator: 'CommandOrControl+A',
+      accelerator: 'CommandOrControl+Shift+A',
       click: () => {
         mb.showWindow();
         if (mb.window) {
