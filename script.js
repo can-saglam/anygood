@@ -29,6 +29,7 @@ class AnygoodApp {
         this.pendingToggle = null;
         this.isLoading = false;
         this.completedItemsExpanded = {}; // Track which categories have completed items expanded
+        this.activeItemId = null; // Track which item is in active/editing state
 
         // Initialize categories
         this.categories.forEach(cat => {
@@ -631,9 +632,13 @@ class AnygoodApp {
 
     setupCategoryClicks() {
         // Use event delegation to handle category card clicks
+        // Only set up once to avoid duplicate listeners
+        if (this.categoryClicksSetup) return;
+        
         const grid = document.getElementById('category-grid');
         if (grid) {
-            grid.addEventListener('click', (e) => {
+            // Store handler references so we can remove them if needed
+            this.categoryClickHandler = (e) => {
                 const card = e.target.closest('.category-card');
                 if (card && !e.target.closest('.category-delete-btn')) {
                     const category = card.getAttribute('data-category');
@@ -643,10 +648,9 @@ class AnygoodApp {
                         this.openCategory(category);
                     }
                 }
-            });
+            };
 
-            // Add keyboard support
-            grid.addEventListener('keydown', (e) => {
+            this.categoryKeydownHandler = (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                     const card = e.target.closest('.category-card');
                     if (card && !e.target.closest('.category-delete-btn')) {
@@ -658,7 +662,12 @@ class AnygoodApp {
                         }
                     }
                 }
-            });
+            };
+
+            grid.addEventListener('click', this.categoryClickHandler);
+            grid.addEventListener('keydown', this.categoryKeydownHandler);
+            
+            this.categoryClicksSetup = true;
         }
     }
 
@@ -1101,6 +1110,23 @@ class AnygoodApp {
         const category = parsed.category || 'do';
         const categoryName = this.categoryMetadata[category]?.name || category;
         const title = parsed.title || clipboardText.substring(0, 50) + (clipboardText.length > 50 ? '...' : '');
+        
+        // Get link and favicon if available
+        let linkHtml = '';
+        if (parsed.link) {
+            try {
+                const domain = new URL(parsed.link).hostname;
+                const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+                linkHtml = `
+                    <a href="${this.escapeHtml(parsed.link)}" target="_blank" class="clipboard-suggestion-link" onclick="event.stopPropagation()">
+                        <img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">
+                        <span>${this.escapeHtml(domain)}</span>
+                    </a>
+                `;
+            } catch (e) {
+                // Invalid URL, skip link
+            }
+        }
 
         // Create a non-intrusive suggestion banner
         const existingBanner = document.getElementById('clipboard-suggestion');
@@ -1113,9 +1139,12 @@ class AnygoodApp {
         banner.className = 'clipboard-suggestion';
         banner.innerHTML = `
             <div class="clipboard-suggestion-content">
-                <span class="clipboard-suggestion-text">
-                    📋 Add "${this.escapeHtml(title)}" to ${categoryName}?
-                </span>
+                <div class="clipboard-suggestion-left">
+                    <span class="clipboard-suggestion-text">
+                        Add "${this.escapeHtml(title)}" to ${categoryName}?
+                    </span>
+                    ${linkHtml}
+                </div>
                 <div class="clipboard-suggestion-actions">
                     <button onclick="app.addFromClipboard('${this.escapeHtml(clipboardText)}')" class="clipboard-add-btn">Add</button>
                     <button onclick="app.dismissClipboardSuggestion()" class="clipboard-dismiss-btn">×</button>
@@ -1199,10 +1228,15 @@ class AnygoodApp {
                 this.closeModal();
             }
         });
-        // ESC key to close modal
+        // ESC key to close modal or exit active item state
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && modal.style.display === 'block') {
-                this.closeModal();
+            if (e.key === 'Escape') {
+                const modal = document.getElementById('modal');
+                if (modal.classList.contains('show') || modal.style.display === 'block') {
+                    this.closeModal();
+                } else if (this.activeItemId) {
+                    this.setActiveItem(null);
+                }
             }
         });
     }
@@ -1340,6 +1374,7 @@ class AnygoodApp {
         this.currentCategory = category;
         this.selectedItems.clear();
         this.bulkMode = false;
+        this.activeItemId = null; // Clear active state when switching categories
         document.getElementById('overview-screen').classList.remove('active');
         document.getElementById('detail-screen').classList.add('active');
         this.renderDetail();
@@ -1349,6 +1384,7 @@ class AnygoodApp {
         this.currentCategory = null;
         this.selectedItems.clear();
         this.bulkMode = false;
+        this.activeItemId = null; // Clear active state when closing category
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
@@ -1407,9 +1443,9 @@ class AnygoodApp {
     renderDetail() {
         if (!this.currentCategory) return;
 
-        const metadata = this.categoryMetadata[this.currentCategory] || { icon: '📋', name: this.currentCategory };
+        const metadata = this.categoryMetadata[this.currentCategory] || { name: this.currentCategory };
         const titleEl = document.getElementById('detail-title');
-        if (titleEl) titleEl.textContent = `${metadata.icon} ${metadata.name}`;
+        if (titleEl) titleEl.textContent = metadata.name;
 
         this.renderDetailItems();
         this.renderDetailCollections();
@@ -1443,39 +1479,82 @@ class AnygoodApp {
                 const actualIndex = this.items[this.currentCategory].findIndex(i => i.id === item.id);
                 const hasMetadata = item.description || item.link;
                 const isSelected = this.selectedItems.has(item.id);
+                const isActive = this.activeItemId === item.id;
 
-                html += `
-                    <div class="item ${hasMetadata ? 'has-metadata' : ''} ${isSelected ? 'selected' : ''}" 
-                         data-item-id="${item.id}">
-                        ${this.bulkMode ? `
-                            <div class="item-checkbox-bulk" onclick="app.toggleItemSelection(${item.id})">
-                                ${isSelected ? '✓' : ''}
+                if (isActive) {
+                    // Active state: editable fields, remove button, Move button
+                    html += `
+                        <div class="item active ${hasMetadata ? 'has-metadata' : ''}" 
+                             data-item-id="${item.id}">
+                            <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
+                            <div class="item-content">
+                                <input type="text" 
+                                       class="item-text-input" 
+                                       value="${this.escapeHtml(item.text)}"
+                                       data-item-id="${item.id}"
+                                       data-field="text"
+                                       onblur="app.updateItemField('${item.id}', 'text', this.value)"
+                                       onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape') app.setActiveItem(null);">
+                                <textarea class="item-description-input" 
+                                          data-item-id="${item.id}"
+                                          data-field="description"
+                                          onblur="app.updateItemField('${item.id}', 'description', this.value)"
+                                          onkeydown="if(event.key==='Escape') app.setActiveItem(null);">${item.description ? this.escapeHtml(item.description) : ''}</textarea>
+                                <input type="url" 
+                                       class="item-link-input" 
+                                       value="${item.link ? this.escapeHtml(item.link) : ''}"
+                                       data-item-id="${item.id}"
+                                       data-field="link"
+                                       onblur="app.updateItemField('${item.id}', 'link', this.value)"
+                                       onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape') app.setActiveItem(null);"
+                                       placeholder="Link URL (optional)">
                             </div>
-                        ` : ''}
-                        <div class="item-checkbox" onclick="app.toggleItem(${actualIndex})"></div>
-                        <div class="item-content">
-                            <div class="item-text">${this.escapeHtml(item.text)}</div>
-                            ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
-                            ${item.tags ? `<div class="item-tags">${item.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}</div>` : ''}
-                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                </svg>
-                                ${this.escapeHtml(new URL(item.link).hostname)}
-                            </a>` : ''}
-                        </div>
-                        ${!this.bulkMode ? `
-                            <div class="item-actions">
-                                <button onclick="app.showAddToCollectionModal(${actualIndex})" 
-                                        title="Add to collection"
-                                        aria-label="Add to collection">📁</button>
+                            <div class="item-actions active-actions">
+                                <button onclick="app.showMoveItemModal(${actualIndex})" 
+                                        title="Move to category"
+                                        aria-label="Move to category"
+                                        class="move-btn">Move</button>
                                 <button onclick="app.deleteItem(${actualIndex})" 
                                         title="Delete"
                                         aria-label="Delete item">🗑️</button>
+                                <button onclick="app.setActiveItem(null)" 
+                                        title="Cancel"
+                                        aria-label="Cancel editing"
+                                        class="cancel-btn">×</button>
                             </div>
-                        ` : ''}
-                    </div>
-                `;
+                        </div>
+                    `;
+                } else {
+                    // Default state: full title, truncated description, link, no buttons
+                    html += `
+                        <div class="item ${hasMetadata ? 'has-metadata' : ''} ${isSelected ? 'selected' : ''}" 
+                             data-item-id="${item.id}"
+                             draggable="true"
+                             ondragstart="app.handleDragStart(event, ${actualIndex})"
+                             ondragover="app.handleDragOver(event)"
+                             ondrop="app.handleDrop(event, ${actualIndex})"
+                             ondragend="app.handleDragEnd(event)"
+                             onclick="app.handleItemClick(event, '${item.id}')">
+                            ${this.bulkMode ? `
+                                <div class="item-checkbox-bulk" onclick="app.toggleItemSelection(${item.id}); event.stopPropagation();">
+                                    ${isSelected ? '✓' : ''}
+                                </div>
+                            ` : ''}
+                            <div class="item-checkbox" onclick="app.toggleItem(${actualIndex}); event.stopPropagation();"></div>
+                            <div class="item-content">
+                                <div class="item-text">${this.escapeHtml(item.text)}</div>
+                                ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
+                                ${item.tags ? `<div class="item-tags">${item.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}</div>` : ''}
+                                ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                    </svg>
+                                    ${this.escapeHtml(new URL(item.link).hostname)}
+                                </a>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
             });
             html += '</div>';
         }
@@ -1559,7 +1638,7 @@ class AnygoodApp {
             <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'} ${isDigest ? 'digest' : ''}" data-collection-id="${collection.id}">
                 <div class="collection-header">
                     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-                        <button class="collection-toggle" onclick="app.toggleCollection(${actualIndex})" aria-label="Toggle collection">▸</button>
+                        ${!isDigest ? `<button class="collection-toggle" onclick="app.toggleCollectionById('${collection.id}')" aria-label="Toggle collection">▸</button>` : ''}
                         <span class="collection-name">
                             ${!isDigest && collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
@@ -1604,22 +1683,28 @@ class AnygoodApp {
                                     <div class="collection-item-content">
                                         <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
                                         ${displayDescription ? `<div class="collection-item-description" title="${this.escapeHtml(item.description || '')}">${this.escapeHtml(displayDescription)}</div>` : ''}
-                                        <div class="collection-item-meta">
-                                            ${!isDigest && item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
+                                        ${!isDigest ? `<div class="collection-item-meta">
+                                            ${item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
                                             ${itemDate ? `<span class="item-date">${itemDate}</span>` : ''}
                                             ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
-                                                ${isDigest && faviconUrl ? `<img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">` : ''}
-                                                ${!isDigest ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                                </svg>` : ''}
+                                                </svg>
                                                 ${this.escapeHtml(new URL(item.link).hostname)}
                                             </a>` : ''}
-                                        </div>
+                                        </div>` : ''}
+                                        ${isDigest ? `<div class="digest-item-footer">
+                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                                ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">` : ''}
+                                                ${this.escapeHtml(new URL(item.link).hostname)}
+                                            </a>` : ''}
+                                            <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
+                                        </div>` : ''}
                                     </div>
-                                    <div class="collection-item-actions">
+                                    ${!isDigest ? `<div class="collection-item-actions">
                                         <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
-                                        ${!isDigest ? `<button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>` : ''}
-                                    </div>
+                                        <button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>
+                                    </div>` : ''}
                                 </div>
                             `;
                         }).join('')
@@ -1650,6 +1735,9 @@ class AnygoodApp {
         `;
 
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
 
         const input = document.getElementById('item-input');
         input.addEventListener('keypress', (e) => {
@@ -1870,12 +1958,182 @@ class AnygoodApp {
     deleteItem(index) {
         if (confirm('Delete this item?')) {
             this.items[this.currentCategory].splice(index, 1);
+            this.activeItemId = null; // Clear active state
             this.saveState();
             this.storage.save('items', this.items);
             this.renderDetail();
             this.updateCategoryCounts();
             this.showNotification('Item deleted', 'success');
         }
+    }
+
+    handleItemClick(event, itemId) {
+        // Don't activate if clicking on interactive elements
+        if (event.target.closest('.item-checkbox') || 
+            event.target.closest('.item-link') || 
+            event.target.closest('a') ||
+            event.target.closest('.item-checkbox-bulk') ||
+            event.target.closest('.item-tags') ||
+            event.target.closest('.tag')) {
+            return;
+        }
+        this.setActiveItem(itemId);
+    }
+
+    setActiveItem(itemId) {
+        // Convert itemId to number to match item.id type (itemId comes as string from onclick handler)
+        this.activeItemId = itemId ? (typeof itemId === 'string' ? parseFloat(itemId) : itemId) : null;
+        this.renderDetail();
+        // Focus the title input if activating
+        if (this.activeItemId) {
+            setTimeout(() => {
+                const input = document.querySelector(`.item-text-input[data-item-id="${this.activeItemId}"]`);
+                if (input) input.focus();
+            }, 50);
+        }
+    }
+
+    updateItemField(itemId, field, value) {
+        const item = this.items[this.currentCategory].find(i => i.id === itemId);
+        if (!item) return;
+
+        if (field === 'text') {
+            item.text = value.trim();
+        } else if (field === 'description') {
+            item.description = value.trim() || undefined;
+        } else if (field === 'link') {
+            item.link = value.trim() || undefined;
+            // Re-extract metadata if link changed
+            if (item.link) {
+                setTimeout(() => this.extractMetadataForItem(item), 100);
+            }
+        }
+
+        this.saveState();
+        this.storage.save('items', this.items);
+        this.renderDetail();
+    }
+
+    // Drag and drop handlers
+    handleDragStart(event, index) {
+        this.draggedItemIndex = index;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/html', event.target.outerHTML);
+        event.currentTarget.classList.add('dragging');
+    }
+
+    handleDragOver(event) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        const item = event.currentTarget;
+        const draggingItem = document.querySelector('.item.dragging');
+        if (draggingItem && item !== draggingItem) {
+            const rect = item.getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (event.clientY < midpoint) {
+                item.classList.add('drag-over-top');
+                item.classList.remove('drag-over-bottom');
+            } else {
+                item.classList.add('drag-over-bottom');
+                item.classList.remove('drag-over-top');
+            }
+        }
+    }
+
+    handleDrop(event, dropIndex) {
+        event.preventDefault();
+        event.stopPropagation();
+        
+        const dragIndex = this.draggedItemIndex;
+        if (dragIndex === undefined || dragIndex === dropIndex) {
+            this.handleDragEnd(event);
+            return;
+        }
+
+        const items = this.items[this.currentCategory];
+        const draggedItem = items[dragIndex];
+        
+        // Remove from old position
+        items.splice(dragIndex, 1);
+        
+        // Calculate new index (accounting for removal)
+        let newIndex = dropIndex;
+        if (dragIndex < dropIndex) {
+            newIndex = dropIndex - 1;
+        }
+        
+        // Insert at new position
+        items.splice(newIndex + 1, 0, draggedItem);
+        
+        this.saveState();
+        this.storage.save('items', this.items);
+        this.renderDetail();
+        this.showNotification('Item reordered', 'success');
+    }
+
+    handleDragEnd(event) {
+        event.preventDefault();
+        document.querySelectorAll('.item').forEach(item => {
+            item.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+        });
+        this.draggedItemIndex = undefined;
+    }
+
+    showMoveItemModal(itemIndex) {
+        const item = this.items[this.currentCategory][itemIndex];
+        if (!item) return;
+
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modal-body');
+
+        // Get all categories except current
+        const otherCategories = this.categories.filter(cat => cat !== this.currentCategory);
+
+        const categoriesHTML = otherCategories.map(cat => {
+            const metadata = this.categoryMetadata[cat] || { name: cat };
+            return `
+                <div class="modal-collection-option" onclick="app.moveItemToCategory(${itemIndex}, '${cat}')">
+                    <strong>${this.escapeHtml(metadata.name)}</strong>
+                </div>
+            `;
+        }).join('');
+
+        modalBody.innerHTML = `
+            <h2>Move Item</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
+            <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 12px;">Select destination category:</p>
+            ${categoriesHTML || '<p style="color: var(--text-secondary);">No other categories available</p>'}
+            <div class="modal-buttons">
+                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
+    }
+
+    moveItemToCategory(itemIndex, targetCategory) {
+        const item = this.items[this.currentCategory][itemIndex];
+        if (!item) return;
+
+        // Remove from current category
+        this.items[this.currentCategory].splice(itemIndex, 1);
+        
+        // Add to target category
+        if (!this.items[targetCategory]) {
+            this.items[targetCategory] = [];
+        }
+        this.items[targetCategory].push(item);
+
+        this.activeItemId = null; // Clear active state
+        this.saveState();
+        this.storage.save('items', this.items);
+        this.closeModal();
+        this.renderDetail();
+        this.updateCategoryCounts();
+        this.showNotification('Item moved', 'success');
     }
 
     checkDuplicates() {
@@ -1933,6 +2191,9 @@ class AnygoodApp {
             </div>
         `;
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
     }
 
     addItemToCollection(itemIndex, collectionIndex) {
@@ -1980,6 +2241,9 @@ class AnygoodApp {
             </div>
         `;
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
     }
 
     async quickImport(url, name) {
@@ -2147,6 +2411,9 @@ class AnygoodApp {
             </div>
         `;
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
 
         const input = document.getElementById('collection-name-input');
         input.addEventListener('keypress', (e) => {
@@ -2172,31 +2439,22 @@ class AnygoodApp {
         }
     }
 
-    toggleCollection(collectionIndex) {
+    toggleCollectionById(collectionId) {
         const collections = this.collections[this.currentCategory] || [];
-        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
-        const isDefaultCategory = defaultCategories.includes(this.currentCategory);
+        const collectionIndex = collections.findIndex(c => c.id === collectionId);
+        if (collectionIndex === -1) return;
         
-        // Filter collections same way as in renderDetailCollections
-        const filteredCollections = isDefaultCategory 
-            ? collections 
-            : collections.filter(c => !c.digest);
+        collections[collectionIndex].expanded = !collections[collectionIndex].expanded;
+        this.storage.save('collections', this.collections);
+        this.renderDetail();
+    }
+
+    toggleCollection(collectionIndex) {
+        // Legacy method - kept for backwards compatibility
+        const collections = this.collections[this.currentCategory] || [];
+        if (collectionIndex < 0 || collectionIndex >= collections.length) return;
         
-        // Separate digest and regular collections
-        const digestCollections = filteredCollections.filter(c => c.digest);
-        const regularCollections = filteredCollections.filter(c => !c.digest);
-        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
-        const sortedCollections = [...digestCollections, ...regularCollections];
-        
-        // Get collection from sorted list
-        const collection = sortedCollections[collectionIndex];
-        if (!collection) return;
-        
-        // Find actual index in original collections array
-        const actualIndex = collections.findIndex(c => c.id === collection.id);
-        if (actualIndex === -1) return;
-        
-        collections[actualIndex].expanded = !collections[actualIndex].expanded;
+        collections[collectionIndex].expanded = !collections[collectionIndex].expanded;
         this.storage.save('collections', this.collections);
         this.renderDetail();
     }
@@ -2296,6 +2554,9 @@ class AnygoodApp {
             <div id="share-output" style="margin-top: 16px;"></div>
         `;
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
     }
 
     exportAsJSON() {
@@ -2440,6 +2701,9 @@ class AnygoodApp {
         `;
 
         modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
 
         const nameInput = document.getElementById('category-name-input');
         nameInput.addEventListener('keypress', (e) => {
@@ -2678,7 +2942,11 @@ class AnygoodApp {
 
     // Utilities
     closeModal() {
-        document.getElementById('modal').style.display = 'none';
+        const modal = document.getElementById('modal');
+        modal.classList.remove('show');
+        setTimeout(() => {
+            modal.style.display = 'none';
+        }, 300); // Match transition duration
     }
 
     escapeHtml(text) {
