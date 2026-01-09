@@ -42,8 +42,9 @@ class AnygoodApp {
         // Suggested sources
         this.suggestedSources = {
             read: [
+                { name: 'The Guardian Books', url: 'https://www.theguardian.com/books/rss', type: 'rss' },
                 { name: 'London Review of Books', url: 'https://www.lrb.co.uk/feed', type: 'rss' },
-                { name: 'The Quietus - Books', url: 'https://thequietus.com/feed', type: 'rss' }
+                { name: 'Literary Hub', url: 'https://lithub.com/feed/', type: 'rss' }
             ],
             listen: [
                 { name: 'Resident Advisor Events', url: 'https://ra.co/xml/eventlistings.xml', type: 'rss' },
@@ -51,33 +52,90 @@ class AnygoodApp {
                 { name: 'Pitchfork Reviews', url: 'https://pitchfork.com/rss/reviews/albums/', type: 'rss' }
             ],
             watch: [
-                { name: 'BFI Film Releases', url: 'https://whatson.bfi.org.uk/Online/default.asp', type: 'list' },
-                { name: 'Little White Lies', url: 'https://lwlies.com/feed/', type: 'rss' }
+                { name: 'Little White Lies', url: 'https://lwlies.com/feed/', type: 'rss' },
+                { name: 'The Guardian Film', url: 'https://www.theguardian.com/film/rss', type: 'rss' },
+                { name: 'BFI', url: 'https://www.bfi.org.uk/rss', type: 'rss' }
             ],
             eat: [
                 { name: 'Hot Dinners London', url: 'https://www.hot-dinners.com/feed', type: 'rss' },
-                { name: 'London Eater', url: 'https://london.eater.com/rss/index.xml', type: 'rss' }
+                { name: 'London Eater', url: 'https://london.eater.com/rss/index.xml', type: 'rss' },
+                { name: 'Timeout London Food', url: 'https://www.timeout.com/london/restaurants/rss.xml', type: 'rss' }
             ],
             do: [
                 { name: 'Londonist Events', url: 'https://londonist.com/feed', type: 'rss' },
-                { name: 'Time Out London', url: 'https://www.timeout.com/london/feed', type: 'rss' }
+                { name: 'Time Out London', url: 'https://www.timeout.com/london/feed', type: 'rss' },
+                { name: 'Eventbrite London', url: 'https://www.eventbrite.co.uk/rss/london', type: 'rss' }
             ]
         };
 
         // Populate placeholder data if first run
         if (this.isFirstRun()) {
             this.populatePlaceholderData();
+            // Save placeholder data immediately
+            this.storage.save('items', this.items);
+            this.storage.save('collections', this.collections);
+        } else {
+            // Ensure each default category has at least an empty Anygood Digest collection if collections are empty
+            // Only create digest for default categories, not user-created ones
+            const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+            this.categories.forEach(cat => {
+                // Only create digest for default categories
+                if (defaultCategories.includes(cat)) {
+                    if (!this.collections[cat] || this.collections[cat].length === 0) {
+                        // Create empty Anygood Digest collection
+                        this.collections[cat] = [{
+                            id: Date.now(),
+                            name: 'Anygood Digest',
+                            digest: true,
+                            expanded: true,
+                            lastUpdated: Date.now(),
+                            sourceUrl: null,
+                            items: []
+                        }];
+                        this.storage.save('collections', this.collections);
+                    } else {
+                        // Check if Anygood Digest exists, if not add it
+                        const hasDigest = this.collections[cat].some(c => c.name === 'Anygood Digest' && c.digest);
+                        if (!hasDigest) {
+                            this.collections[cat].unshift({
+                                id: Date.now(),
+                                name: 'Anygood Digest',
+                                digest: true,
+                                expanded: true,
+                                lastUpdated: Date.now(),
+                                sourceUrl: null,
+                                items: []
+                            });
+                            this.storage.save('collections', this.collections);
+                        }
+                    }
+                }
+            });
         }
 
         // Save initial state for undo
         this.saveState();
 
         this.init();
+
+        // Auto-populate recommendations in background (only if empty)
+        // Don't await - let it run asynchronously
+        setTimeout(() => {
+            this.autoPopulateRecommendations().catch(err => {
+                // Silently handle errors - this is background operation
+                console.log('Auto-populate recommendations error:', err);
+            });
+        }, 1000);
     }
 
     isFirstRun() {
-        return Object.values(this.items).every(arr => arr.length === 0) &&
-               Object.values(this.collections).every(arr => arr.length === 0);
+        // Check if items are empty or don't exist
+        const itemsEmpty = Object.keys(this.items).length === 0 || 
+                          Object.values(this.items).every(arr => !arr || arr.length === 0);
+        // Check if collections are empty or don't exist
+        const collectionsEmpty = Object.keys(this.collections).length === 0 || 
+                                Object.values(this.collections).every(arr => !arr || arr.length === 0);
+        return itemsEmpty && collectionsEmpty;
     }
 
     populatePlaceholderData() {
@@ -277,18 +335,94 @@ class AnygoodApp {
         this.collections.read = [
             {
                 id: Date.now() - 6000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 3600000, // 1 hour ago
+                sourceUrl: 'https://www.lrb.co.uk/feed',
+                items: [
+                    {
+                        id: Date.now() - 6001,
+                        text: 'The Uses of Disenchantment',
+                        description: 'A review of recent works on the history of magic and the supernatural in early modern Europe',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n01',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 3600000,
+                        pubDate: new Date(Date.now() - 3600000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6002,
+                        text: 'On Not Being Able to Read',
+                        description: 'An essay on the changing nature of reading in the digital age and what we lose when we skim',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n02',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 7200000,
+                        pubDate: new Date(Date.now() - 7200000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6003,
+                        text: 'The Quietus Book Review: The New Nature Writing',
+                        description: 'Exploring how contemporary writers are reimagining our relationship with the natural world',
+                        link: 'https://thequietus.com/articles/book-review-nature-writing',
+                        source: 'The Quietus - Books',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 10800000,
+                        pubDate: new Date(Date.now() - 10800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6004,
+                        text: 'London Review of Books: The Art of Translation',
+                        description: 'A deep dive into the challenges and rewards of literary translation, featuring interviews with leading translators',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n03',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 14400000,
+                        pubDate: new Date(Date.now() - 14400000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6005,
+                        text: 'The Quietus: Independent Bookshops in London',
+                        description: 'A guide to the best independent bookshops across London, from Hackney to Hampstead',
+                        link: 'https://thequietus.com/articles/london-bookshops-guide',
+                        source: 'The Quietus - Books',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 18000000,
+                        pubDate: new Date(Date.now() - 18000000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 6006,
+                        text: 'LRB: The Future of the Novel',
+                        description: 'Leading authors discuss how the novel is evolving in response to new technologies and changing reader habits',
+                        link: 'https://www.lrb.co.uk/the-paper/v46/n04',
+                        source: 'London Review of Books',
+                        sourceUrl: 'https://www.lrb.co.uk/feed',
+                        importedAt: Date.now() - 21600000,
+                        pubDate: new Date(Date.now() - 21600000).toISOString(),
+                        completed: false
+                    }
+                ]
+            },
+            {
+                id: Date.now() - 6007,
                 name: 'London Literature',
                 curated: true,
                 items: [
                     {
-                        id: Date.now() - 6001,
+                        id: Date.now() - 6008,
                         text: 'White Teeth',
                         description: 'Zadie Smith - Multi-generational saga of three London families',
                         link: 'https://www.goodreads.com/book/show/3711.White_Teeth',
                         completed: false
                     },
                     {
-                        id: Date.now() - 6002,
+                        id: Date.now() - 6009,
                         text: 'NW',
                         description: 'Zadie Smith - Four Londoners reconnect in northwest London',
                         link: 'https://www.goodreads.com/book/show/13486385-nw',
@@ -301,11 +435,178 @@ class AnygoodApp {
         this.collections.listen = [
             {
                 id: Date.now() - 7000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 1800000, // 30 minutes ago
+                sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                items: [
+                    {
+                        id: Date.now() - 7001,
+                        text: 'Pitchfork: Overmono - Good Lies (9.0)',
+                        description: 'The UK electronic duo deliver a masterful debut album that blends garage, breaks, and ambient textures into something entirely new',
+                        link: 'https://pitchfork.com/reviews/albums/overmono-good-lies/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 1800000,
+                        pubDate: new Date(Date.now() - 1800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7002,
+                        text: 'The Quietus: Floating Points Live at Printworks',
+                        description: 'A review of the electronic producer\'s stunning live performance, blending jazz, classical, and club music',
+                        link: 'https://thequietus.com/articles/floating-points-printworks-review',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 5400000,
+                        pubDate: new Date(Date.now() - 5400000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7003,
+                        text: 'Pitchfork: Black Country, New Road - Ants From Up There (9.2)',
+                        description: 'The London septet\'s sophomore album is a sprawling, emotionally devastating masterpiece that defies categorization',
+                        link: 'https://pitchfork.com/reviews/albums/black-country-new-road-ants-from-up-there/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 9000000,
+                        pubDate: new Date(Date.now() - 9000000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7004,
+                        text: 'The Quietus: NTS Radio\'s Best Shows of the Month',
+                        description: 'A curated selection of the finest radio shows from NTS, featuring everything from ambient to techno',
+                        link: 'https://thequietus.com/articles/nts-radio-best-shows-month',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 12600000,
+                        pubDate: new Date(Date.now() - 12600000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7005,
+                        text: 'Pitchfork: Fred again.. - actual life 3 (8.5)',
+                        description: 'The producer\'s third installment of his diary series continues to blur the lines between found sounds and club music',
+                        link: 'https://pitchfork.com/reviews/albums/fred-again-actual-life-3/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 16200000,
+                        pubDate: new Date(Date.now() - 16200000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7006,
+                        text: 'The Quietus: The Lot Radio - 24/7 Independent Broadcasting',
+                        description: 'A feature on the Brooklyn-based online radio station that has become a hub for underground electronic music',
+                        link: 'https://thequietus.com/articles/lot-radio-feature',
+                        source: 'The Quietus Music',
+                        sourceUrl: 'https://thequietus.com/feed',
+                        importedAt: Date.now() - 19800000,
+                        pubDate: new Date(Date.now() - 19800000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 7007,
+                        text: 'Pitchfork: Essential UK Garage Classics',
+                        description: 'A guide to the foundational tracks of UK garage, from its origins in the 90s to its modern revival',
+                        link: 'https://pitchfork.com/features/lists/uk-garage-classics/',
+                        source: 'Pitchfork Reviews',
+                        sourceUrl: 'https://pitchfork.com/rss/reviews/albums/',
+                        importedAt: Date.now() - 23400000,
+                        pubDate: new Date(Date.now() - 23400000).toISOString(),
+                        completed: false
+                    }
+                ]
+            },
+            {
+                id: Date.now() - 7008,
                 name: 'Essential UK Dance',
                 curated: true,
                 items: [
-                    { id: Date.now() - 7001, text: 'Overmono - Good Lies', completed: false },
-                    { id: Date.now() - 7002, text: 'Fred again.. - actual life', completed: false }
+                    { id: Date.now() - 7009, text: 'Overmono - Good Lies', completed: false },
+                    { id: Date.now() - 7010, text: 'Fred again.. - actual life', completed: false }
+                ]
+            }
+        ];
+
+        // Add watch digest collection
+        this.collections.watch = [
+            {
+                id: Date.now() - 8000,
+                name: 'Anygood Digest',
+                digest: true,
+                expanded: true,
+                lastUpdated: Date.now() - 2700000, // 45 minutes ago
+                sourceUrl: 'https://lwlies.com/feed/',
+                items: [
+                    {
+                        id: Date.now() - 8001,
+                        text: 'Little White Lies: Past Lives Review',
+                        description: 'Celine Song\'s quietly devastating debut about two childhood friends reconnecting after decades apart',
+                        link: 'https://lwlies.com/films/past-lives-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 2700000,
+                        pubDate: new Date(Date.now() - 2700000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8002,
+                        text: 'Little White Lies: The Bear Season 3 - TV Review',
+                        description: 'The Chicago restaurant drama continues its Michelin-star ambitions with another season of high-stakes kitchen drama',
+                        link: 'https://lwlies.com/tv/the-bear-season-3-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 6300000,
+                        pubDate: new Date(Date.now() - 6300000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8003,
+                        text: 'Little White Lies: Aftersun - Film of the Year',
+                        description: 'Charlotte Wells\' stunning debut about a daughter\'s fragmented memories of a Turkish holiday with her father',
+                        link: 'https://lwlies.com/films/aftersun-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 9900000,
+                        pubDate: new Date(Date.now() - 9900000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8004,
+                        text: 'Little White Lies: Anatomy of a Fall - Palme d\'Or Winner',
+                        description: 'Justine Triet\'s courtroom drama dissects a marriage through the lens of a murder investigation',
+                        link: 'https://lwlies.com/films/anatomy-of-a-fall-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 13500000,
+                        pubDate: new Date(Date.now() - 13500000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8005,
+                        text: 'Little White Lies: How To with John Wilson - Documentary Series',
+                        description: 'An anxious New Yorker documents life\'s absurdities in this hilarious and poignant HBO series',
+                        link: 'https://lwlies.com/tv/how-to-with-john-wilson-review/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 17100000,
+                        pubDate: new Date(Date.now() - 17100000).toISOString(),
+                        completed: false
+                    },
+                    {
+                        id: Date.now() - 8006,
+                        text: 'Little White Lies: Best Films of 2024 So Far',
+                        description: 'A mid-year roundup of the finest cinema releases, from festival favorites to mainstream hits',
+                        link: 'https://lwlies.com/features/best-films-2024/',
+                        source: 'Little White Lies',
+                        sourceUrl: 'https://lwlies.com/feed/',
+                        importedAt: Date.now() - 20700000,
+                        pubDate: new Date(Date.now() - 20700000).toISOString(),
+                        completed: false
+                    }
                 ]
             }
         ];
@@ -320,20 +621,574 @@ class AnygoodApp {
         this.setupDarkMode();
         this.setupSearch();
         this.setupQuickAdd();
+        this.setupClipboardMonitoring();
+        this.setupElectronIPC();
+        this.setupCategoryClicks();
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
     }
 
+    setupCategoryClicks() {
+        // Use event delegation to handle category card clicks
+        const grid = document.getElementById('category-grid');
+        if (grid) {
+            grid.addEventListener('click', (e) => {
+                const card = e.target.closest('.category-card');
+                if (card && !e.target.closest('.category-delete-btn')) {
+                    const category = card.getAttribute('data-category');
+                    if (category) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.openCategory(category);
+                    }
+                }
+            });
+
+            // Add keyboard support
+            grid.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    const card = e.target.closest('.category-card');
+                    if (card && !e.target.closest('.category-delete-btn')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const category = card.getAttribute('data-category');
+                        if (category) {
+                            this.openCategory(category);
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    setupElectronIPC() {
+        // Listen for focus events from Electron
+        if (window.electronAPI) {
+            window.electronAPI.onFocusQuickAdd(() => {
+                // Use a longer timeout to ensure DOM is ready
+                setTimeout(() => this.focusQuickAddInput(), 200);
+            });
+        }
+        
+        // Also focus when window becomes visible (for browser compatibility)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !this.currentCategory) {
+                setTimeout(() => this.focusQuickAddInput(), 200);
+            }
+        });
+        
+        // Focus on initial load if on main view
+        setTimeout(() => {
+            if (!this.currentCategory) {
+                this.focusQuickAddInput();
+            }
+        }, 300);
+    }
+
+    focusQuickAddInput() {
+        // Only focus if we're on the main view
+        if (!this.currentCategory) {
+            // Try multiple times with increasing delays to ensure DOM is ready
+            const tryFocus = (attempt = 0) => {
+                const input = document.getElementById('quick-add-input');
+                if (input) {
+                    try {
+                        input.focus();
+                        input.select();
+                    } catch (e) {
+                        // Retry if focus failed and we haven't tried too many times
+                        if (attempt < 3) {
+                            setTimeout(() => tryFocus(attempt + 1), 100 * (attempt + 1));
+                        }
+                    }
+                } else if (attempt < 5) {
+                    // Retry if element not found yet
+                    setTimeout(() => tryFocus(attempt + 1), 100 * (attempt + 1));
+                }
+            };
+            tryFocus();
+        }
+    }
+
     setupQuickAdd() {
         const input = document.getElementById('quick-add-input');
         if (input) {
-            input.addEventListener('keypress', (e) => {
+            let debounceTimer;
+            
+            // Handle input changes with debounce
+            input.addEventListener('input', async (e) => {
+                const text = input.value.trim();
+                
+                // Clear existing timer
+                clearTimeout(debounceTimer);
+                
+                // Hide preview if input is empty
+                if (!text) {
+                    this.hidePreview();
+                    return;
+                }
+                
+                // Debounce parsing
+                debounceTimer = setTimeout(async () => {
+                    await this.updatePreview(text);
+                }, 300);
+            });
+            
+            // Handle Enter key - add from preview if visible, otherwise show preview
+            input.addEventListener('keypress', async (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    this.quickAddFromMain();
+                    const preview = document.getElementById('input-preview');
+                    if (preview && preview.style.display !== 'none') {
+                        this.addFromPreview();
+                    } else {
+                        const text = input.value.trim();
+                        if (text) {
+                            await this.updatePreview(text);
+                        }
+                    }
                 }
             });
+            
+            // Hide preview when input loses focus (with delay to allow button clicks)
+            input.addEventListener('blur', (e) => {
+                setTimeout(() => {
+                    const preview = document.getElementById('input-preview');
+                    if (!preview) return;
+                    
+                    // Check if focus moved to preview or its children
+                    const activeElement = document.activeElement;
+                    const isFocusInPreview = preview.contains(activeElement);
+                    const isHoveringPreview = preview.matches(':hover');
+                    
+                    if (!isFocusInPreview && !isHoveringPreview) {
+                        this.hidePreview();
+                    }
+                }, 200);
+            });
+        }
+    }
+    
+    async updatePreview(text) {
+        if (!text || text.trim().length === 0) {
+            this.hidePreview();
+            return;
+        }
+        
+        try {
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            if (!parsed.title) {
+                this.hidePreview();
+                return;
+            }
+            
+            // Determine category
+            let category = parsed.category;
+            if (!category) {
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
+            }
+            
+            // Show preview
+            this.showPreview(parsed, category);
+        } catch (error) {
+            console.error('Preview update error:', error);
+            this.hidePreview();
+        }
+    }
+    
+    showPreview(parsed, detectedCategory) {
+        const preview = document.getElementById('input-preview');
+        const previewTitle = document.getElementById('preview-title');
+        const categorySelector = document.getElementById('preview-category-selector');
+        
+        if (!preview || !previewTitle || !categorySelector) return;
+        
+        // Update title
+        previewTitle.textContent = parsed.title;
+        
+        // Populate category selector
+        categorySelector.innerHTML = '';
+        this.categories.forEach(cat => {
+            const metadata = this.categoryMetadata[cat] || { name: cat };
+            const option = document.createElement('option');
+            option.value = cat;
+            option.textContent = metadata.name;
+            option.selected = cat === detectedCategory;
+            categorySelector.appendChild(option);
+        });
+        
+        // Show preview with animation
+        preview.style.display = 'block';
+        requestAnimationFrame(() => {
+            preview.classList.add('preview-visible');
+        });
+    }
+    
+    hidePreview() {
+        const preview = document.getElementById('input-preview');
+        if (preview) {
+            preview.classList.remove('preview-visible');
+            setTimeout(() => {
+                preview.style.display = 'none';
+            }, 200);
+        }
+    }
+    
+    async addFromPreview() {
+        const input = document.getElementById('quick-add-input');
+        const previewTitle = document.getElementById('preview-title');
+        const categorySelector = document.getElementById('preview-category-selector');
+        
+        if (!input || !previewTitle || !categorySelector) return;
+        
+        const text = input.value.trim();
+        if (!text) return;
+        
+        try {
+            this.showLoading('Processing...');
+            
+            // Parse natural language
+            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
+            
+            // Get selected category
+            const category = categorySelector.value || parsed.category;
+            
+            // Ensure category exists
+            if (!this.categories.includes(category)) {
+                this.addCategorySilently(category, parsed.title || text);
+            }
+            
+            // Create item
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || text,
+                completed: false
+            };
+            
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+            
+            // Generate tags
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+            
+            // Add to category
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+            
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+            
+            // Clear input and hide preview
+            input.value = '';
+            this.hidePreview();
+            input.focus();
+            
+            this.hideLoading();
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+            
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Add from preview error:', error);
+        }
+    }
+
+    setupClipboardMonitoring() {
+        this.lastClipboardContent = '';
+        this.clipboardCheckInterval = null;
+
+        // Check clipboard when app becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.checkClipboard();
+            }
+        });
+
+        // Check clipboard periodically (every 2 seconds)
+        this.clipboardCheckInterval = setInterval(() => {
+            this.checkClipboard();
+        }, 2000);
+
+        // Initial check
+        setTimeout(() => this.checkClipboard(), 1000);
+    }
+
+    async checkClipboard() {
+        try {
+            let clipboardText = '';
+            
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    clipboardText = await navigator.clipboard.readText();
+                } catch (e) {
+                    // Fallback to document.execCommand for older browsers/Electron
+                    const textArea = document.createElement('textarea');
+                    textArea.style.position = 'fixed';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    document.execCommand('paste');
+                    clipboardText = textArea.value;
+                    document.body.removeChild(textArea);
+                }
+            } else {
+                // Fallback for environments without clipboard API
+                return;
+            }
+            
+            // Skip if same content or empty
+            if (!clipboardText || clipboardText === this.lastClipboardContent) {
+                return;
+            }
+
+            // Skip if it's too short or looks like random text
+            if (clipboardText.trim().length < 3) {
+                return;
+            }
+
+            // Skip if it looks like code or system text
+            if (this.looksLikeCode(clipboardText)) {
+                return;
+            }
+
+            // Parse clipboard content to see if it's addable
+            const parsed = await this.aiFeatures.parseNaturalLanguage(clipboardText);
+            
+            // Check if it looks like something we can add
+            if (this.isAddableContent(clipboardText, parsed)) {
+                this.lastClipboardContent = clipboardText;
+                this.showClipboardSuggestion(clipboardText, parsed);
+            }
+        } catch (error) {
+            // Clipboard access might be denied or not available
+            // Silently fail - this is expected in some contexts
+        }
+    }
+
+    looksLikeCode(text) {
+        // Skip if it looks like code (has lots of special characters, brackets, etc.)
+        const trimmed = text.trim();
+        const codePatterns = [
+            /^[a-zA-Z0-9_$]+\s*[=:]\s*/,  // Variable assignments
+            /^[{}[\]]+/,  // Brackets
+            /^(\/\/|\/\*|#|<!--|```|~~)/,  // Comments and code blocks
+            /^function\s*\(|^const\s+\w+\s*=|^let\s+\w+\s*=|^var\s+\w+\s*=|^class\s+\w+|^import\s+|^export\s+/,  // Code patterns
+            /\n.*\{.*\}/,  // Code blocks with braces
+            /<[a-z]+[^>]*>.*<\/[a-z]+>/i,  // HTML tags
+            /^\s*(if|for|while|switch|case|def|import|from|require)\s*\(?/,  // Code keywords
+            /\/\/.*|\/\*[\s\S]*?\*\//,  // Comments
+            /```[\s\S]*?```/,  // Code fences
+        ];
+        
+        // Check for method calls (but exclude URLs)
+        const urlPattern = /^https?:\/\//i;
+        if (!urlPattern.test(trimmed) && /^\w+\.\w+\(/.test(trimmed)) {
+            return true;
+        }
+        
+        // Check if it has too many code-like characters
+        const codeCharCount = (trimmed.match(/[{}[\]();=<>]/g) || []).length;
+        const totalChars = trimmed.length;
+        const codeCharRatio = totalChars > 0 ? codeCharCount / totalChars : 0;
+        
+        // If more than 10% are code characters and no URLs, likely code
+        if (codeCharRatio > 0.1 && !/https?:\/\//.test(trimmed)) {
+            return true;
+        }
+        
+        return codePatterns.some(pattern => pattern.test(trimmed));
+    }
+
+    isAddableContent(text, parsed) {
+        const trimmed = text.trim();
+        
+        // Skip if too short or too long
+        if (trimmed.length < 5 || trimmed.length > 300) {
+            return false;
+        }
+
+        // Enhanced URL detection - support various URL patterns
+        const urlPatterns = [
+            /https?:\/\/[^\s]+/i,  // HTTP/HTTPS URLs
+            /www\.\w+\.\w+[^\s]*/i,  // www URLs
+            /[\w\-]+\.(com|org|net|io|co|uk|edu|gov|me|app|dev)[^\s]*/i,  // Domain patterns
+        ];
+        const hasUrl = urlPatterns.some(pattern => pattern.test(trimmed));
+
+        // Enhanced title detection patterns
+        const titlePatterns = [
+            // Book titles with "by" author
+            /^["'"]?[^"'"\n]{10,}["'"]?\s+by\s+[A-Z][a-zA-Z\s]+$/i,
+            // Movie/show titles with year
+            /^[A-Z][^0-9]{10,}\s*\(\d{4}\)/i,
+            // Titles in quotes
+            /^["'"]([^"'"\n]{10,})["'"]$/,
+            // ISBN patterns
+            /\b(ISBN[- ]*(13|10)?[: ]*)?([0-9]{9,13}[0-9X])\b/i,
+            // IMDB IDs
+            /tt\d{7,8}/i,
+            // Spotify URIs
+            /spotify:(track|album|artist|playlist):[a-zA-Z0-9]+/i,
+            // Article/blog titles (sentence case, reasonable length)
+            /^[A-Z][^.!?]{20,}[a-z]$/,
+        ];
+        const looksLikeTitle = titlePatterns.some(pattern => pattern.test(trimmed)) ||
+                              (parsed.title && parsed.title.length > 3 && parsed.title !== trimmed);
+
+        // Media identifiers
+        const mediaIndicators = [
+            /\b(ISBN|IMDB|Spotify|Apple Music|YouTube|Netflix|Hulu|Disney\+)\b/i,
+            /^watch\s+/i,
+            /^read\s+/i,
+            /^listen\s+to\s+/i,
+            /\b(movie|film|book|album|song|podcast|series|show|episode)\b/i,
+        ];
+        const hasMediaIndicator = mediaIndicators.some(pattern => pattern.test(trimmed));
+
+        // Restaurant/place indicators
+        const placeIndicators = [
+            /\b(restaurant|cafe|bar|bistro|diner|eatery|food|cuisine|menu)\b/i,
+            /\d+\s+[A-Z][a-z]+\s+(Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Boulevard|Blvd)/i,
+        ];
+        const looksLikePlace = placeIndicators.some(pattern => pattern.test(trimmed));
+
+        // Check parsed results
+        const hasParsedTitle = parsed.title && parsed.title.length > 5 && parsed.title !== trimmed;
+        const hasCategory = parsed.category !== null;
+        const hasParsedLink = parsed.link && parsed.link.length > 0;
+
+        // Exclude common non-consumable patterns
+        const excludePatterns = [
+            /^(error|warning|debug|log|console|exception)/i,
+            /^\d{1,2}:\d{2}(\s*(AM|PM))?$/i,  // Time only
+            /^\d{4}-\d{2}-\d{2}$/,  // Date only
+            /^[\d\s\+\-\(\)]+$/,  // Phone numbers or numbers only
+            /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i,  // Email only (without context)
+        ];
+        const shouldExclude = excludePatterns.some(pattern => pattern.test(trimmed));
+
+        if (shouldExclude) {
+            return false;
+        }
+
+        // Must have at least one indicator of consumable content
+        return (hasUrl || hasParsedLink || looksLikeTitle || hasParsedTitle || hasMediaIndicator || looksLikePlace || hasCategory) &&
+               !this.looksLikeCode(trimmed);
+    }
+
+    showClipboardSuggestion(clipboardText, parsed) {
+        // Don't show if modal is already open
+        if (document.getElementById('modal').style.display === 'block') {
+            return;
+        }
+
+        // Don't show if user is typing
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+            return;
+        }
+
+        const category = parsed.category || 'do';
+        const categoryName = this.categoryMetadata[category]?.name || category;
+        const title = parsed.title || clipboardText.substring(0, 50) + (clipboardText.length > 50 ? '...' : '');
+
+        // Create a non-intrusive suggestion banner
+        const existingBanner = document.getElementById('clipboard-suggestion');
+        if (existingBanner) {
+            existingBanner.remove();
+        }
+
+        const banner = document.createElement('div');
+        banner.id = 'clipboard-suggestion';
+        banner.className = 'clipboard-suggestion';
+        banner.innerHTML = `
+            <div class="clipboard-suggestion-content">
+                <span class="clipboard-suggestion-text">
+                    📋 Add "${this.escapeHtml(title)}" to ${categoryName}?
+                </span>
+                <div class="clipboard-suggestion-actions">
+                    <button onclick="app.addFromClipboard('${this.escapeHtml(clipboardText)}')" class="clipboard-add-btn">Add</button>
+                    <button onclick="app.dismissClipboardSuggestion()" class="clipboard-dismiss-btn">×</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(banner);
+
+        // Auto-dismiss after 10 seconds
+        setTimeout(() => {
+            if (banner.parentNode) {
+                banner.classList.add('dismissing');
+                setTimeout(() => banner.remove(), 300);
+            }
+        }, 10000);
+    }
+
+    async addFromClipboard(clipboardText) {
+        this.dismissClipboardSuggestion();
+        
+        try {
+            this.showLoading('Adding from clipboard...');
+            
+            const parsed = await this.aiFeatures.parseNaturalLanguage(clipboardText);
+            let category = parsed.category;
+            
+            if (!category) {
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || clipboardText });
+            }
+
+            if (!this.categories.includes(category)) {
+                this.addCategorySilently(category, parsed.title || clipboardText);
+            }
+
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || clipboardText.trim(),
+                completed: false
+            };
+
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+
+            this.hideLoading();
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Clipboard add error:', error);
+        }
+    }
+
+    dismissClipboardSuggestion() {
+        const banner = document.getElementById('clipboard-suggestion');
+        if (banner) {
+            banner.classList.add('dismissing');
+            setTimeout(() => banner.remove(), 300);
         }
     }
 
@@ -357,10 +1212,18 @@ class AnygoodApp {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-            // Cmd/Ctrl + N: New item
-            if (cmdOrCtrl && e.key === 'n' && this.currentCategory) {
+            // Cmd/Ctrl + N: Context-aware
+            // - From main view: Create new category
+            // - From list view: Add new item
+            if (cmdOrCtrl && e.key === 'n') {
                 e.preventDefault();
-                this.showAddItemModal();
+                if (this.currentCategory) {
+                    // In list view - add new item
+                    this.showAddItemModal();
+                } else {
+                    // In main view - create new category
+                    this.showAddCategoryModal();
+                }
             }
 
             // Cmd/Ctrl + Z: Undo
@@ -375,7 +1238,8 @@ class AnygoodApp {
                 this.redo();
             }
 
-            // Cmd/Ctrl + A: Select all (in bulk mode)
+            // Cmd/Ctrl + A: Select all (in bulk mode only)
+            // Note: Global Cmd+A to open app is handled by Electron
             if (cmdOrCtrl && e.key === 'a' && this.bulkMode) {
                 e.preventDefault();
                 this.selectAllItems();
@@ -488,6 +1352,8 @@ class AnygoodApp {
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
+        // Focus input when returning to main view
+        setTimeout(() => this.focusQuickAddInput(), 100);
     }
 
     // Rendering
@@ -520,7 +1386,7 @@ class AnygoodApp {
             card.setAttribute('role', 'button');
             card.setAttribute('tabindex', '0');
             card.setAttribute('aria-label', `${metadata.name} category`);
-            card.onclick = () => this.openCategory(category);
+            // Note: Click handling is done via event delegation in setupCategoryClicks()
             
             card.innerHTML = `
                 <div class="category-icon" aria-hidden="true">${metadata.icon}</div>
@@ -661,47 +1527,98 @@ class AnygoodApp {
         if (!collectionsElement) return;
 
         const collections = this.collections[this.currentCategory] || [];
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const isDefaultCategory = defaultCategories.includes(this.currentCategory);
 
-        if (collections.length === 0) {
+        // Filter out digest collections for user-created categories
+        const filteredCollections = isDefaultCategory 
+            ? collections 
+            : collections.filter(c => !c.digest);
+
+        if (filteredCollections.length === 0) {
             collectionsElement.innerHTML = '<div class="empty-state">No collections yet</div>';
             return;
         }
 
-        collectionsElement.innerHTML = collections.map((collection, collectionIndex) => `
-            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'}" data-collection-id="${collection.id}">
+        // Separate digest collections from regular collections
+        const digestCollections = filteredCollections.filter(c => c.digest);
+        const regularCollections = filteredCollections.filter(c => !c.digest);
+
+        // Sort digest collections by last updated (newest first)
+        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+
+        // Combine: digest first, then regular
+        const sortedCollections = [...digestCollections, ...regularCollections];
+
+        collectionsElement.innerHTML = sortedCollections.map((collection, collectionIndex) => {
+            const actualIndex = filteredCollections.indexOf(collection);
+            const isDigest = collection.digest;
+            const lastUpdated = collection.lastUpdated ? this.rssParser.formatRelativeTime(new Date(collection.lastUpdated).toISOString()) : null;
+            
+            return `
+            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'} ${isDigest ? 'digest' : ''}" data-collection-id="${collection.id}">
                 <div class="collection-header">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <button class="collection-toggle" onclick="app.toggleCollection(${collectionIndex})" aria-label="Toggle collection">▸</button>
+                    <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
+                        <button class="collection-toggle" onclick="app.toggleCollection(${actualIndex})" aria-label="Toggle collection">▸</button>
                         <span class="collection-name">
-                            ${collection.curated ? '<span class="badge-curated">★</span>' : ''}
+                            ${!isDigest && collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
                         </span>
+                        ${lastUpdated ? `<span class="collection-updated">Updated ${lastUpdated}</span>` : ''}
                     </div>
                     <div class="collection-actions">
-                        <span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>
-                        <button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>
+                        ${!isDigest ? `<span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>` : ''}
+                        ${isDigest ? `<button class="refresh-btn" onclick="app.refreshDigest(${actualIndex})" title="Refresh feed" aria-label="Refresh feed">↻</button>` : ''}
+                        ${!isDigest ? `<button onclick="app.deleteCollection(${actualIndex})" title="Delete" aria-label="Delete collection">🗑️</button>` : ''}
                     </div>
                 </div>
-                <div class="collection-items">
+                <div class="collection-items ${isDigest ? 'digest-items-horizontal' : ''}">
                     ${collection.items.length === 0 ?
                         '<div class="empty-state" style="padding: 20px;">Empty collection</div>' :
                         collection.items.map((item, itemIndex) => {
-                            const hasMetadata = item.description || item.link;
+                            const hasMetadata = item.description || item.link || (!isDigest && (item.pubDate || item.source));
+                            // Summarize description for digest items
+                            const displayDescription = isDigest && item.description 
+                                ? this.aiFeatures.summarizeDescription(item.description, 80)
+                                : item.description;
+                            
+                            // Get favicon URL for digest items
+                            let faviconUrl = null;
+                            if (isDigest && item.link) {
+                                try {
+                                    const domain = new URL(item.link).hostname;
+                                    faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+                                } catch (e) {
+                                    // Invalid URL, skip favicon
+                                }
+                            }
+                            
+                            // For non-digest items, show date and source as before
+                            const itemDate = !isDigest && item.pubDate ? this.rssParser.formatRelativeTime(item.pubDate) : null;
+                            
                             return `
-                                <div class="collection-item ${hasMetadata ? 'has-metadata' : ''}">
+                                <div class="collection-item ${isDigest ? 'digest-item-card' : ''} ${hasMetadata ? 'has-metadata' : ''}" 
+                                     data-collection-item-id="${item.id || itemIndex}" 
+                                     data-collection-index="${actualIndex}" 
+                                     data-item-index="${itemIndex}">
                                     <div class="collection-item-content">
                                         <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
-                                        ${item.description ? `<div class="collection-item-description">${this.escapeHtml(item.description)}</div>` : ''}
-                                        ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
-                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
-                                            </svg>
-                                            ${this.escapeHtml(new URL(item.link).hostname)}
-                                        </a>` : ''}
+                                        ${displayDescription ? `<div class="collection-item-description" title="${this.escapeHtml(item.description || '')}">${this.escapeHtml(displayDescription)}</div>` : ''}
+                                        <div class="collection-item-meta">
+                                            ${!isDigest && item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
+                                            ${itemDate ? `<span class="item-date">${itemDate}</span>` : ''}
+                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                                ${isDigest && faviconUrl ? `<img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">` : ''}
+                                                ${!isDigest ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                                                </svg>` : ''}
+                                                ${this.escapeHtml(new URL(item.link).hostname)}
+                                            </a>` : ''}
+                                        </div>
                                     </div>
                                     <div class="collection-item-actions">
-                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})">Add</button>
-                                        <button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>
+                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
+                                        ${!isDigest ? `<button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>` : ''}
                                     </div>
                                 </div>
                             `;
@@ -709,7 +1626,8 @@ class AnygoodApp {
                     }
                 </div>
             </div>
-        `).join('');
+        `;
+        }).join('');
     }
 
     // Items - Enhanced with AI and metadata
@@ -1071,21 +1989,51 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: name,
-                    items: items.map(text => ({
+                // Check if "Anygood Digest" collection exists for this category
+                let digestCollection = this.collections[this.currentCategory].find(
+                    c => c.name === 'Anygood Digest'
+                );
+
+                if (!digestCollection) {
+                    // Create new "Anygood Digest" collection
+                    digestCollection = {
+                        id: Date.now(),
+                        name: 'Anygood Digest',
+                        items: [],
+                        expanded: true,
+                        digest: true,
+                        lastUpdated: Date.now()
+                    };
+                    this.collections[this.currentCategory].push(digestCollection);
+                }
+
+                // Add items with full metadata
+                const newItems = items.map(item => {
+                    const itemObj = {
                         id: Date.now() + Math.random(),
-                        text: text,
-                        completed: false
-                    })),
-                    expanded: true
+                        text: item.title || item,
+                        completed: false,
+                        source: name,
+                        sourceUrl: url,
+                        importedAt: Date.now()
+                    };
+                    
+                    if (item.description) itemObj.description = item.description;
+                    if (item.link) itemObj.link = item.link;
+                    if (item.pubDate) itemObj.pubDate = item.pubDate;
+                    
+                    return itemObj;
                 });
+
+                // Add to digest collection
+                digestCollection.items.push(...newItems);
+                digestCollection.lastUpdated = Date.now();
+
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items`, 'success');
+                this.showNotification(`Imported ${items.length} items to Anygood Digest`, 'success');
             } else {
                 this.hideLoading();
                 this.showNotification(`Could not fetch items from ${name}`, 'error');
@@ -1107,9 +2055,11 @@ class AnygoodApp {
         try {
             this.showLoading('Processing import...');
             let items = [];
+            let isRSSFeed = false;
 
             if (input.startsWith('http://') || input.startsWith('https://')) {
                 items = await this.rssParser.parseURL(input);
+                isRSSFeed = true;
             } else {
                 items = input.split('\n')
                     .map(line => line.trim())
@@ -1120,21 +2070,62 @@ class AnygoodApp {
             this.hideLoading();
 
             if (items.length > 0) {
-                this.collections[this.currentCategory].push({
-                    id: Date.now(),
-                    name: collectionName,
-                    items: items.map(text => ({
-                        id: Date.now() + Math.random(),
-                        text: text,
-                        completed: false
-                    })),
-                    expanded: true
-                });
+                if (isRSSFeed) {
+                    // For RSS feeds, add to "Anygood Digest"
+                    let digestCollection = this.collections[this.currentCategory].find(
+                        c => c.name === 'Anygood Digest'
+                    );
+
+                    if (!digestCollection) {
+                        digestCollection = {
+                            id: Date.now(),
+                            name: 'Anygood Digest',
+                            items: [],
+                            expanded: true,
+                            digest: true,
+                            lastUpdated: Date.now()
+                        };
+                        this.collections[this.currentCategory].push(digestCollection);
+                    }
+
+                    const newItems = items.map(item => {
+                        const itemObj = {
+                            id: Date.now() + Math.random(),
+                            text: item.title || item,
+                            completed: false,
+                            source: collectionName,
+                            sourceUrl: input,
+                            importedAt: Date.now()
+                        };
+                        
+                        if (item.description) itemObj.description = item.description;
+                        if (item.link) itemObj.link = item.link;
+                        if (item.pubDate) itemObj.pubDate = item.pubDate;
+                        
+                        return itemObj;
+                    });
+
+                    digestCollection.items.push(...newItems);
+                    digestCollection.lastUpdated = Date.now();
+                } else {
+                    // For plain text lists, create regular collection
+                    this.collections[this.currentCategory].push({
+                        id: Date.now(),
+                        name: collectionName,
+                        items: items.map(text => ({
+                            id: Date.now() + Math.random(),
+                            text: text,
+                            completed: false
+                        })),
+                        expanded: true
+                    });
+                }
+                
                 this.saveState();
                 this.storage.save('collections', this.collections);
                 this.renderDetail();
                 this.closeModal();
-                this.showNotification(`Imported ${items.length} items`, 'success');
+                this.showNotification(`Imported ${items.length} items${isRSSFeed ? ' to Anygood Digest' : ''}`, 'success');
             } else {
                 this.showNotification('Could not parse any items', 'error');
             }
@@ -1182,13 +2173,40 @@ class AnygoodApp {
     }
 
     toggleCollection(collectionIndex) {
-        const collection = this.collections[this.currentCategory][collectionIndex];
-        collection.expanded = !collection.expanded;
+        const collections = this.collections[this.currentCategory] || [];
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        const isDefaultCategory = defaultCategories.includes(this.currentCategory);
+        
+        // Filter collections same way as in renderDetailCollections
+        const filteredCollections = isDefaultCategory 
+            ? collections 
+            : collections.filter(c => !c.digest);
+        
+        // Separate digest and regular collections
+        const digestCollections = filteredCollections.filter(c => c.digest);
+        const regularCollections = filteredCollections.filter(c => !c.digest);
+        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+        const sortedCollections = [...digestCollections, ...regularCollections];
+        
+        // Get collection from sorted list
+        const collection = sortedCollections[collectionIndex];
+        if (!collection) return;
+        
+        // Find actual index in original collections array
+        const actualIndex = collections.findIndex(c => c.id === collection.id);
+        if (actualIndex === -1) return;
+        
+        collections[actualIndex].expanded = !collections[actualIndex].expanded;
         this.storage.save('collections', this.collections);
         this.renderDetail();
     }
 
     deleteCollection(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (collection && collection.digest) {
+            this.showNotification('Cannot delete Anygood Digest collection', 'error');
+            return;
+        }
         if (confirm('Delete this collection?')) {
             this.collections[this.currentCategory].splice(collectionIndex, 1);
             this.saveState();
@@ -1199,6 +2217,11 @@ class AnygoodApp {
     }
 
     deleteCollectionItem(collectionIndex, itemIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (collection && collection.digest) {
+            // Cannot delete items from digest collections
+            return;
+        }
         this.collections[this.currentCategory][collectionIndex].items.splice(itemIndex, 1);
         this.saveState();
         this.storage.save('collections', this.collections);
@@ -1206,14 +2229,55 @@ class AnygoodApp {
     }
 
     addCollectionItemToMain(collectionIndex, itemIndex) {
-        const collectionItem = this.collections[this.currentCategory][collectionIndex].items[itemIndex];
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        const collectionItem = collection.items[itemIndex];
+        const isDigest = collection.digest;
+        
         if (!this.items[this.currentCategory].find(i => i.id === collectionItem.id)) {
-            this.items[this.currentCategory].push({ ...collectionItem, completed: false });
+            // Create item copy
+            const newItem = { ...collectionItem, completed: false };
+            
+            // If it's from digest and has a description, summarize it
+            if (isDigest && newItem.description) {
+                newItem.description = this.aiFeatures.summarizeDescription(newItem.description, 100);
+            }
+            
+            this.items[this.currentCategory].push(newItem);
             this.saveState();
             this.storage.save('items', this.items);
-            this.renderDetail();
             this.updateCategoryCounts();
             this.showNotification('Item added to list', 'success');
+            
+            // If it's a digest item, animate removal
+            if (isDigest) {
+                const itemElement = document.querySelector(
+                    `.collection-item[data-collection-index="${collectionIndex}"][data-item-index="${itemIndex}"]`
+                );
+                
+                if (itemElement) {
+                    // Add animation class
+                    itemElement.classList.add('moving-out');
+                    
+                    // Remove item after animation completes
+                    setTimeout(() => {
+                        // Remove from collection
+                        collection.items.splice(itemIndex, 1);
+                        this.saveState();
+                        this.storage.save('collections', this.collections);
+                        // Re-render to update UI
+                        this.renderDetail();
+                    }, 400); // Match the animation duration + small delay
+                } else {
+                    // Fallback: remove immediately if element not found
+                    collection.items.splice(itemIndex, 1);
+                    this.saveState();
+                    this.storage.save('collections', this.collections);
+                    this.renderDetail();
+                }
+            } else {
+                // For non-digest items, just re-render
+                this.renderDetail();
+            }
         }
     }
 
@@ -1338,71 +2402,22 @@ class AnygoodApp {
         this.showNotification(`Imported ${imported} items`, 'success');
     }
 
-    // Quick Add from Main View
+    // Quick Add from Main View (now uses preview flow)
     async quickAddFromMain() {
+        // This function is kept for backward compatibility
+        // The actual add logic is now in addFromPreview()
         const input = document.getElementById('quick-add-input');
         if (!input) return;
 
         const text = input.value.trim();
         if (!text) return;
 
-        try {
-            this.showLoading('Processing...');
-            
-            // Parse natural language
-            const parsed = await this.aiFeatures.parseNaturalLanguage(text);
-            
-            // Determine category
-            let category = parsed.category;
-            if (!category) {
-                // Auto-categorize
-                category = await this.aiFeatures.autoCategorize({ text: parsed.title || text });
-            }
-
-            // Ensure category exists
-            if (!this.categories.includes(category)) {
-                // Create category if it doesn't exist
-                this.addCategorySilently(category, parsed.title || text);
-            }
-
-            // Create item
-            const newItem = {
-                id: Date.now(),
-                text: parsed.title || text,
-                completed: false
-            };
-
-            if (parsed.description) newItem.description = parsed.description;
-            if (parsed.link) {
-                newItem.link = parsed.link;
-                // Extract metadata in background
-                setTimeout(() => this.extractMetadataForItem(newItem), 100);
-            }
-            if (parsed.author) newItem.author = parsed.author;
-
-            // Generate tags
-            const tags = this.aiFeatures.generateTags(newItem);
-            if (tags.length > 0) newItem.tags = tags;
-
-            // Add to category
-            if (!this.items[category]) this.items[category] = [];
-            this.items[category].push(newItem);
-
-            this.saveState();
-            this.storage.save('items', this.items);
-            this.updateCategoryCounts();
-
-            // Clear input
-            input.value = '';
-            input.focus();
-
-            this.hideLoading();
-            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
-
-        } catch (error) {
-            this.hideLoading();
-            this.showNotification(`Error: ${error.message}`, 'error');
-            console.error('Quick add error:', error);
+        // Show preview first, or add directly if preview is visible
+        const preview = document.getElementById('input-preview');
+        if (preview && preview.style.display !== 'none') {
+            this.addFromPreview();
+        } else {
+            await this.updatePreview(text);
         }
     }
 
@@ -1538,6 +2553,127 @@ class AnygoodApp {
         if (!this.currentCategory) return;
         this.completedItemsExpanded[this.currentCategory] = !this.completedItemsExpanded[this.currentCategory];
         this.renderDetailItems();
+    }
+
+    async refreshDigest(collectionIndex) {
+        const collection = this.collections[this.currentCategory][collectionIndex];
+        if (!collection || !collection.digest) return;
+
+        // Find the source URL from the first item
+        const firstItem = collection.items.find(item => item.sourceUrl);
+        if (!firstItem || !firstItem.sourceUrl) {
+            this.showNotification('Cannot refresh: no source URL found', 'error');
+            return;
+        }
+
+        const sourceName = firstItem.source || 'feed';
+        
+        try {
+            this.showLoading(`Refreshing ${sourceName}...`);
+            const items = await this.rssParser.parseURL(firstItem.sourceUrl);
+            this.hideLoading();
+
+            if (items.length > 0) {
+                // Add new items (avoid duplicates by checking text)
+                const existingTexts = new Set(collection.items.map(i => i.text));
+                const newItems = items
+                    .filter(item => !existingTexts.has(item.title || item))
+                    .map(item => {
+                        const itemObj = {
+                            id: Date.now() + Math.random(),
+                            text: item.title || item,
+                            completed: false,
+                            source: sourceName,
+                            sourceUrl: firstItem.sourceUrl,
+                            importedAt: Date.now()
+                        };
+                        
+                        if (item.description) itemObj.description = item.description;
+                        if (item.link) itemObj.link = item.link;
+                        if (item.pubDate) itemObj.pubDate = item.pubDate;
+                        
+                        return itemObj;
+                    });
+
+                if (newItems.length > 0) {
+                    collection.items.unshift(...newItems); // Add new items at the top
+                    collection.lastUpdated = Date.now();
+                    this.saveState();
+                    this.storage.save('collections', this.collections);
+                    this.renderDetail();
+                    this.showNotification(`Added ${newItems.length} new items`, 'success');
+                } else {
+                    this.showNotification('No new items found', 'info');
+                }
+            } else {
+                this.hideLoading();
+                this.showNotification('Could not fetch items', 'error');
+            }
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Refresh failed: ${error.message}`, 'error');
+        }
+    }
+
+    async autoPopulateRecommendations() {
+        // Only populate if digest collections are empty (don't overwrite existing data)
+        // This runs silently in the background
+        // Only populate for default categories, not user-created ones
+        const defaultCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        for (const category of this.categories) {
+            // Skip user-created categories
+            if (!defaultCategories.includes(category)) continue;
+            
+            const collections = this.collections[category] || [];
+            const digestCollection = collections.find(c => c.name === 'Anygood Digest' && c.digest);
+            
+            // Only populate if digest collection exists and is empty
+            if (digestCollection && (!digestCollection.items || digestCollection.items.length === 0)) {
+                const sources = this.suggestedSources[category] || [];
+                
+                // Try to populate from the first available RSS source
+                for (const source of sources) {
+                    if (source.type === 'rss' && source.url) {
+                        try {
+                            const items = await this.rssParser.parseURL(source.url);
+                            
+                            if (items && items.length > 0) {
+                                // Add items to digest collection
+                                const newItems = items.slice(0, 20).map(item => {
+                                    const itemObj = {
+                                        id: Date.now() + Math.random(),
+                                        text: item.title || item,
+                                        completed: false,
+                                        source: source.name,
+                                        sourceUrl: source.url,
+                                        importedAt: Date.now()
+                                    };
+                                    
+                                    if (item.description) itemObj.description = item.description;
+                                    if (item.link) itemObj.link = item.link;
+                                    if (item.pubDate) itemObj.pubDate = item.pubDate;
+                                    
+                                    return itemObj;
+                                });
+
+                                digestCollection.items = newItems;
+                                digestCollection.lastUpdated = Date.now();
+                                digestCollection.sourceUrl = source.url;
+                                
+                                this.storage.save('collections', this.collections);
+                                
+                                // Only populate from first successful source per category
+                                break;
+                            }
+                        } catch (error) {
+                            // Silently fail - try next source or skip category
+                            console.log(`Failed to auto-populate from ${source.name}:`, error.message);
+                            continue;
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Utilities
