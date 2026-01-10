@@ -11,6 +11,12 @@
         <!-- Overview Screen -->
         <div id="overview-screen" class="screen active">
             <header class="main-header">
+                <button class="settings-icon-btn" onclick="app.settings.showSettingsModal()" title="Settings" aria-label="Open settings">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M10 12.5C11.3807 12.5 12.5 11.3807 12.5 10C12.5 8.61929 11.3807 7.5 10 7.5C8.61929 7.5 7.5 8.61929 7.5 10C7.5 11.3807 8.61929 12.5 10 12.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M16.1667 12.5C16.0554 12.7513 16.0222 13.0302 16.0714 13.3006C16.1206 13.571 16.2499 13.8203 16.4417 14.0167L16.4917 14.0667C16.6416 14.2162 16.7604 14.3938 16.8413 14.5891C16.9222 14.7844 16.9637 14.9937 16.9637 15.2051C16.9637 15.4164 16.9222 15.6257 16.8413 15.821C16.7604 16.0163 16.6416 16.1939 16.4917 16.3434C16.3421 16.4932 16.1645 16.612 15.9692 16.6929C15.7739 16.7738 15.5646 16.8153 15.3533 16.8153C15.1419 16.8153 14.9326 16.7738 14.7373 16.6929C14.542 16.612 14.3644 16.4932 14.215 16.3434L14.165 16.2934C13.9686 16.1015 13.7193 15.9722 13.4489 15.9231C13.1785 15.8739 12.8996 15.907 12.6483 16.0184C12.4018 16.1249 12.1922 16.3021 12.0464 16.5277C11.9006 16.7534 11.825 17.0179 11.8283 17.2867V17.5C11.8283 17.9199 11.6615 18.3226 11.3645 18.6195C11.0676 18.9164 10.6649 19.0833 10.245 19.0833C9.82507 19.0833 9.42238 18.9164 9.12545 18.6195C8.82851 18.3226 8.66167 17.9199 8.66167 17.5V17.425C8.65332 17.1482 8.56892 16.8796 8.41798 16.6497C8.26704 16.4198 8.05561 16.2376 7.80667 16.125C7.55536 16.0136 7.27644 15.9805 7.00606 16.0296C6.73568 16.0788 6.4864 16.2081 6.29 16.4L6.24 16.45C6.09054 16.5998 5.91291 16.7186 5.71761 16.7995C5.52232 16.8804 5.31302 16.9219 5.10167 16.9219C4.89031 16.9219 4.68101 16.8804 4.48572 16.7995C4.29042 16.7186 4.11279 16.5998 3.96333 16.45C3.81348 16.3005 3.69466 16.1229 3.61377 15.9276C3.53288 15.7323 3.49139 15.523 3.49139 15.3117C3.49139 15.1003 3.53288 14.891 3.61377 14.6957C3.69466 14.5004 3.81348 14.3228 3.96333 14.1734L4.01333 14.1234C4.20521 13.927 4.33454 13.6777 4.3837 13.4073C4.43286 13.1369 4.39971 12.858 4.28833 12.6067C4.18192 12.3601 4.00471 12.1506 3.77906 12.0048C3.55342 11.859 3.28895 11.7834 3.02 11.7867H2.83333C2.41341 11.7867 2.01072 11.6198 1.71379 11.3229C1.41685 11.026 1.25 10.6233 1.25 10.2034C1.25 9.78344 1.41685 9.38075 1.71379 9.08381C2.01072 8.78688 2.41341 8.62003 2.83333 8.62003H2.90833C3.18515 8.61169 3.45373 8.52729 3.68363 8.37635C3.91353 8.22541 4.09572 8.01398 4.20833 7.76503C4.31971 7.51372 4.35286 7.2348 4.3037 6.96442C4.25454 6.69404 4.12521 6.44476 3.93333 6.24836V6.24836L3.88333 6.19836C3.73348 6.0489 3.61466 5.87127 3.53377 5.67598C3.45288 5.48068 3.41139 5.27138 3.41139 5.06003C3.41139 4.84867 3.45288 4.63937 3.53377 4.44408C3.61466 4.24878 3.73348 4.07115 3.88333 3.92169C4.03279 3.77184 4.21042 3.65302 4.40572 3.57213C4.60101 3.49124 4.81031 3.44975 5.02167 3.44975C5.23302 3.44975 5.44232 3.49124 5.63761 3.57213C5.83291 3.65302 6.01054 3.77184 6.16 3.92169L6.21 3.97169C6.4064 4.16357 6.65568 4.2929 6.92606 4.34206C7.19644 4.39122 7.47536 4.35807 7.72667 4.24669H7.80667C8.05321 4.14028 8.26271 3.96307 8.40851 3.73743C8.55432 3.51178 8.62993 3.24731 8.62667 2.97836V2.79169C8.62667 2.37177 8.79351 1.96908 9.09045 1.67214C9.38738 1.37521 9.79007 1.20836 10.21 1.20836C10.6299 1.20836 11.0326 1.37521 11.3295 1.67214C11.6265 1.96908 11.7933 2.37177 11.7933 2.79169V2.86669C11.7901 3.13564 11.8657 3.40011 12.0115 3.62576C12.1573 3.8514 12.3668 4.02861 12.6133 4.13503C12.8646 4.2464 13.1435 4.27955 13.4139 4.23039C13.6843 4.18123 13.9336 4.0519 14.13 3.86003L14.18 3.81003C14.3294 3.66018 14.5071 3.54136 14.7024 3.46047C14.8977 3.37957 15.107 3.33809 15.3183 3.33809C15.5297 3.33809 15.739 3.37957 15.9343 3.46047C16.1296 3.54136 16.3072 3.66018 16.4567 3.81003C16.6065 3.95948 16.7253 4.13711 16.8062 4.33241C16.8871 4.5277 16.9286 4.737 16.9286 4.94836C16.9286 5.15972 16.8871 5.36902 16.8062 5.56431C16.7253 5.75961 16.6065 5.93724 16.4567 6.08669V6.08669L16.4067 6.13669C16.2148 6.33309 16.0855 6.58237 16.0363 6.85275C15.9872 7.12313 16.0203 7.40205 16.1317 7.65336C16.2381 7.8999 16.4153 8.10941 16.6409 8.25521C16.8666 8.40102 17.131 8.47663 17.4 8.47336H17.5833C18.0033 8.47336 18.406 8.64021 18.7029 8.93714C18.9998 9.23408 19.1667 9.63677 19.1667 10.0567C19.1667 10.4766 18.9998 10.8793 18.7029 11.1762C18.406 11.4732 18.0033 11.64 17.5833 11.64H17.5083C17.2394 11.6433 16.9749 11.7189 16.7493 11.8647C16.5236 12.0105 16.3464 12.22 16.24 12.4667V12.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
                 <h1>anygood</h1>
             </header>
 
@@ -21,41 +27,46 @@
                        placeholder="Type anything... e.g., 'Read The Creative Act by Rick Rubin' or 'Watch Past Lives'"
                        autocomplete="off"
                        aria-label="Quick add item using natural language">
-                <button class="quick-add-btn" onclick="app.quickAddFromMain()" title="Add item" aria-label="Add item">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                        <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                </button>
+            </div>
+            
+            <!-- Input Preview -->
+            <div id="input-preview" class="input-preview" style="display: none;">
+                <div class="preview-card">
+                    <div class="preview-content">
+                        <div class="preview-title" id="preview-title"></div>
+                        <select id="preview-category-selector" class="preview-category-selector"></select>
+                    </div>
+                    <button class="preview-add-btn" onclick="app.addFromPreview()" title="Add item" aria-label="Add item">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <div class="category-grid" id="category-grid">
-                <div class="category-card" data-category="read" onclick="app.openCategory('read')" role="button" tabindex="0" aria-label="Read category">
-                    <div class="category-icon" aria-hidden="true">📚</div>
-                    <h2>Read</h2>
+                <div class="category-card" data-category="read" role="button" tabindex="0" aria-label="Read category">
+                    <h2>Read <span class="category-shortcut-hint">⌘+1</span></h2>
                     <div class="category-count" id="read-count" aria-label="0 uncompleted items">0</div>
                 </div>
 
-                <div class="category-card" data-category="listen" onclick="app.openCategory('listen')" role="button" tabindex="0" aria-label="Listen category">
-                    <div class="category-icon" aria-hidden="true">🎵</div>
-                    <h2>Listen</h2>
+                <div class="category-card" data-category="listen" role="button" tabindex="0" aria-label="Listen category">
+                    <h2>Listen <span class="category-shortcut-hint">⌘+2</span></h2>
                     <div class="category-count" id="listen-count" aria-label="0 uncompleted items">0</div>
                 </div>
 
-                <div class="category-card" data-category="watch" onclick="app.openCategory('watch')" role="button" tabindex="0" aria-label="Watch category">
-                    <div class="category-icon" aria-hidden="true">📺</div>
-                    <h2>Watch</h2>
+                <div class="category-card" data-category="watch" role="button" tabindex="0" aria-label="Watch category">
+                    <h2>Watch <span class="category-shortcut-hint">⌘+3</span></h2>
                     <div class="category-count" id="watch-count" aria-label="0 uncompleted items">0</div>
                 </div>
 
-                <div class="category-card" data-category="eat" onclick="app.openCategory('eat')" role="button" tabindex="0" aria-label="Eat category">
-                    <div class="category-icon" aria-hidden="true">🍽️</div>
-                    <h2>Eat</h2>
+                <div class="category-card" data-category="eat" role="button" tabindex="0" aria-label="Eat category">
+                    <h2>Eat <span class="category-shortcut-hint">⌘+4</span></h2>
                     <div class="category-count" id="eat-count" aria-label="0 uncompleted items">0</div>
                 </div>
 
-                <div class="category-card" data-category="do" onclick="app.openCategory('do')" role="button" tabindex="0" aria-label="Do category">
-                    <div class="category-icon" aria-hidden="true">✨</div>
-                    <h2>Do</h2>
+                <div class="category-card" data-category="do" role="button" tabindex="0" aria-label="Do category">
+                    <h2>Do <span class="category-shortcut-hint">⌘+5</span></h2>
                     <div class="category-count" id="do-count" aria-label="0 uncompleted items">0</div>
                 </div>
             </div>
@@ -67,6 +78,7 @@
                         <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                     <span>Add Category</span>
+                    <span class="category-shortcut-hint">⌘+N</span>
                 </button>
             </div>
         </div>
@@ -86,7 +98,7 @@
                             <path d="M14 14V17H2V14H0V17C0 18.1 0.9 19 2 19H14C15.1 19 16 18.1 16 17V14H14ZM13 7L11.59 5.59L9 8.17V0H7V8.17L4.41 5.59L3 7L8 12L13 7Z" fill="currentColor"/>
                         </svg>
                     </button>
-                    <button class="add-btn" onclick="app.showAddItemModal()">
+                    <button class="add-btn header-add-btn" onclick="app.showAddItemModal()" style="display: none;">
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                         </svg>
@@ -97,29 +109,30 @@
             <div class="detail-content">
                 <!-- Collections Section (Recommendations) -->
                 <div class="section">
-                    <div class="section-header">
-                        <h3 class="section-title">Recommendations</h3>
-                        <div style="display: flex; gap: 12px;">
-                            <button class="add-collection-btn-small" onclick="app.showImportModal()" title="Import from URL or list">📥</button>
-                            <button class="add-collection-btn-small" onclick="app.showAddCollectionModal()">+</button>
-                        </div>
-                    </div>
                     <div id="detail-collections"></div>
                 </div>
 
                 <!-- Main Items Section -->
                 <div class="section">
-                    <h3 class="section-title">To Do</h3>
                     <div class="items-list" id="detail-items-list"></div>
                 </div>
             </div>
+
         </div>
     </div>
+
+    <!-- Floating Add Button (outside .app to avoid transform inheritance) -->
+    <button class="floating-add-btn" onclick="app.showAddItemModal()" title="Add new item (Cmd+N)" aria-label="Add new item">
+        <svg width="24" height="24" viewBox="0 0 20 20" fill="none">
+            <path d="M10 4V16M4 10H16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="floating-add-hint">⌘+N</span>
+    </button>
 
     <!-- Modal -->
     <div id="modal" class="modal">
         <div class="modal-content">
-            <div id="modal-body"></div>
+            <div id="modal-body" class="modal-body"></div>
         </div>
     </div>
 
@@ -131,6 +144,10 @@
     <script src="js/search-engine.js"></script>
     <script src="js/ai-features.js"></script>
     <script src="js/undo-redo.js"></script>
+    <script src="js/url-parser.js"></script>
+    <script src="js/auth-service.js"></script>
+    <script src="js/sync-service.js"></script>
+    <script src="js/settings-manager.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
