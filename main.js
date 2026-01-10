@@ -16,7 +16,11 @@ const mb = menubar({
       contextIsolation: true,
       enableRemoteModule: false,
       // Allow localStorage to work
-      partition: 'persist:anygood'
+      partition: 'persist:anygood',
+      // Enable clipboard access
+      clipboard: true,
+      // Enable IPC for communication
+      preload: path.join(__dirname, 'preload.js')
     },
     // Make it look more native
     transparent: false,
@@ -32,9 +36,55 @@ const mb = menubar({
 mb.on('ready', () => {
   console.log('anygood is ready in menu bar');
 
+  // Global keyboard shortcut: Cmd+A to open Anygood
+  // Note: On macOS, this may require accessibility permissions
+  const { globalShortcut, app } = require('electron');
+  
+  const registerShortcut = () => {
+    // Try to unregister first in case it's already registered
+    globalShortcut.unregister('CommandOrControl+A');
+    
+    const registered = globalShortcut.register('CommandOrControl+A', () => {
+      console.log('Cmd+A pressed - opening Anygood');
+      mb.showWindow();
+      if (mb.window) {
+        mb.window.focus();
+        // Send message to focus input field
+        mb.window.webContents.send('focus-quick-add');
+      }
+    });
+    
+    if (!registered) {
+      console.log('Failed to register Cmd+A shortcut. It may be in use by another app.');
+      console.log('Note: On macOS, you may need to grant accessibility permissions.');
+    } else {
+      console.log('Cmd+A shortcut registered successfully');
+    }
+  };
+
+  // Register immediately and also after app is ready
+  registerShortcut();
+  
+  // Also try registering after a delay (sometimes helps on macOS)
+  setTimeout(registerShortcut, 500);
+  setTimeout(registerShortcut, 2000);
+
   // Optional: Add a context menu for right-click
-  const { Menu } = require('electron');
+  const { Menu, globalShortcut } = require('electron');
   const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Anygood',
+      accelerator: 'CommandOrControl+A',
+      click: () => {
+        mb.showWindow();
+        if (mb.window) {
+          mb.window.focus();
+        }
+      }
+    },
+    {
+      type: 'separator'
+    },
     {
       label: 'Refresh',
       click: () => {
@@ -52,11 +102,60 @@ mb.on('ready', () => {
   mb.tray.on('right-click', () => {
     mb.tray.popUpContextMenu(contextMenu);
   });
+
+  // Register global shortcut Command+A to show window
+  const shortcut = process.platform === 'darwin' ? 'Command+A' : 'CommandOrControl+A';
+  globalShortcut.register(shortcut, () => {
+    if (mb.window && mb.window.isVisible()) {
+      mb.hideWindow();
+    } else {
+      mb.showWindow();
+    }
+  });
+});
+
+// Unregister shortcuts on app quit
+mb.app.on('will-quit', () => {
+  const { globalShortcut } = require('electron');
+  globalShortcut.unregisterAll();
+});
+
+// Unregister shortcuts on app quit
+mb.app.on('will-quit', () => {
+  const { globalShortcut } = require('electron');
+  globalShortcut.unregisterAll();
 });
 
 mb.on('after-create-window', () => {
   // Open DevTools in development (comment out for production)
   // mb.window.webContents.openDevTools({ mode: 'detach' });
+  
+  // Focus input field when window is shown
+  mb.window.on('show', () => {
+    setTimeout(() => {
+      if (mb.window && !mb.window.isDestroyed()) {
+        mb.window.webContents.send('focus-quick-add');
+      }
+    }, 150);
+  });
+  
+  // Also focus when window gains focus
+  mb.window.on('focus', () => {
+    setTimeout(() => {
+      if (mb.window && !mb.window.isDestroyed()) {
+        mb.window.webContents.send('focus-quick-add');
+      }
+    }, 150);
+  });
+});
+
+// Handle window show event from menubar
+mb.on('show', () => {
+  setTimeout(() => {
+    if (mb.window && !mb.window.isDestroyed()) {
+      mb.window.webContents.send('focus-quick-add');
+    }
+  }, 150);
 });
 
 // Handle app activation (macOS)

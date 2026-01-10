@@ -320,9 +320,38 @@ class AnygoodApp {
         this.setupDarkMode();
         this.setupSearch();
         this.setupQuickAdd();
+        this.setupClipboardMonitoring();
+        this.setupElectronIPC();
         this.renderOverview();
         this.checkForSharedData();
         this.updateCategoryCounts();
+    }
+
+    setupElectronIPC() {
+        // Listen for focus events from Electron
+        if (window.electronAPI) {
+            window.electronAPI.onFocusQuickAdd(() => {
+                this.focusQuickAddInput();
+            });
+        }
+        
+        // Also focus when window becomes visible (for browser compatibility)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && !this.currentCategory) {
+                setTimeout(() => this.focusQuickAddInput(), 100);
+            }
+        });
+    }
+
+    focusQuickAddInput() {
+        // Only focus if we're on the main view
+        if (!this.currentCategory) {
+            const input = document.getElementById('quick-add-input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }
     }
 
     setupQuickAdd() {
@@ -334,6 +363,208 @@ class AnygoodApp {
                     this.quickAddFromMain();
                 }
             });
+        }
+    }
+
+    setupClipboardMonitoring() {
+        this.lastClipboardContent = '';
+        this.clipboardCheckInterval = null;
+
+        // Check clipboard when app becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                this.checkClipboard();
+            }
+        });
+
+        // Check clipboard periodically (every 2 seconds)
+        this.clipboardCheckInterval = setInterval(() => {
+            this.checkClipboard();
+        }, 2000);
+
+        // Initial check
+        setTimeout(() => this.checkClipboard(), 1000);
+    }
+
+    async checkClipboard() {
+        try {
+            let clipboardText = '';
+            
+            // Try modern clipboard API first
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                try {
+                    clipboardText = await navigator.clipboard.readText();
+                } catch (e) {
+                    // Fallback to document.execCommand for older browsers/Electron
+                    const textArea = document.createElement('textarea');
+                    textArea.style.position = 'fixed';
+                    textArea.style.opacity = '0';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    document.execCommand('paste');
+                    clipboardText = textArea.value;
+                    document.body.removeChild(textArea);
+                }
+            } else {
+                // Fallback for environments without clipboard API
+                return;
+            }
+            
+            // Skip if same content or empty
+            if (!clipboardText || clipboardText === this.lastClipboardContent) {
+                return;
+            }
+
+            // Skip if it's too short or looks like random text
+            if (clipboardText.trim().length < 3) {
+                return;
+            }
+
+            // Skip if it looks like code or system text
+            if (this.looksLikeCode(clipboardText)) {
+                return;
+            }
+
+            // Parse clipboard content to see if it's addable
+            const parsed = await this.aiFeatures.parseNaturalLanguage(clipboardText);
+            
+            // Check if it looks like something we can add
+            if (this.isAddableContent(clipboardText, parsed)) {
+                this.lastClipboardContent = clipboardText;
+                this.showClipboardSuggestion(clipboardText, parsed);
+            }
+        } catch (error) {
+            // Clipboard access might be denied or not available
+            // Silently fail - this is expected in some contexts
+        }
+    }
+
+    looksLikeCode(text) {
+        // Skip if it looks like code (has lots of special characters, brackets, etc.)
+        const codePatterns = [
+            /^[a-zA-Z0-9_$]+\s*[=:]\s*/,  // Variable assignments
+            /^[{}[\]]+/,  // Brackets
+            /^(\/\/|\/\*|#|<!--)/,  // Comments
+            /^function\s*\(|^const\s+\w+\s*=|^let\s+\w+\s*=|^var\s+\w+\s*=/,  // Code patterns
+            /\n.*\{.*\}/,  // Code blocks
+        ];
+        
+        return codePatterns.some(pattern => pattern.test(text.trim()));
+    }
+
+    isAddableContent(text, parsed) {
+        // Check if it looks like a title, URL, or structured content
+        const hasUrl = /https?:\/\/[^\s]+/.test(text);
+        const hasTitle = parsed.title && parsed.title.length > 3;
+        const hasCategory = parsed.category !== null;
+        const looksLikeItem = text.length > 5 && text.length < 200;
+
+        return (hasUrl || hasTitle || hasCategory) && looksLikeItem;
+    }
+
+    showClipboardSuggestion(clipboardText, parsed) {
+        // Don't show if modal is already open
+        if (document.getElementById('modal').style.display === 'block') {
+            return;
+        }
+
+        // Don't show if user is typing
+        const activeElement = document.activeElement;
+        if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+            return;
+        }
+
+        const category = parsed.category || 'do';
+        const categoryName = this.categoryMetadata[category]?.name || category;
+        const title = parsed.title || clipboardText.substring(0, 50) + (clipboardText.length > 50 ? '...' : '');
+
+        // Create a non-intrusive suggestion banner
+        const existingBanner = document.getElementById('clipboard-suggestion');
+        if (existingBanner) {
+            existingBanner.remove();
+        }
+
+        const banner = document.createElement('div');
+        banner.id = 'clipboard-suggestion';
+        banner.className = 'clipboard-suggestion';
+        banner.innerHTML = `
+            <div class="clipboard-suggestion-content">
+                <span class="clipboard-suggestion-text">
+                    📋 Add "${this.escapeHtml(title)}" to ${categoryName}?
+                </span>
+                <div class="clipboard-suggestion-actions">
+                    <button onclick="app.addFromClipboard('${this.escapeHtml(clipboardText)}')" class="clipboard-add-btn">Add</button>
+                    <button onclick="app.dismissClipboardSuggestion()" class="clipboard-dismiss-btn">×</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(banner);
+
+        // Auto-dismiss after 10 seconds
+        setTimeout(() => {
+            if (banner.parentNode) {
+                banner.classList.add('dismissing');
+                setTimeout(() => banner.remove(), 300);
+            }
+        }, 10000);
+    }
+
+    async addFromClipboard(clipboardText) {
+        this.dismissClipboardSuggestion();
+        
+        try {
+            this.showLoading('Adding from clipboard...');
+            
+            const parsed = await this.aiFeatures.parseNaturalLanguage(clipboardText);
+            let category = parsed.category;
+            
+            if (!category) {
+                category = await this.aiFeatures.autoCategorize({ text: parsed.title || clipboardText });
+            }
+
+            if (!this.categories.includes(category)) {
+                this.addCategorySilently(category, parsed.title || clipboardText);
+            }
+
+            const newItem = {
+                id: Date.now(),
+                text: parsed.title || clipboardText.trim(),
+                completed: false
+            };
+
+            if (parsed.description) newItem.description = parsed.description;
+            if (parsed.link) {
+                newItem.link = parsed.link;
+                setTimeout(() => this.extractMetadataForItem(newItem), 100);
+            }
+            if (parsed.author) newItem.author = parsed.author;
+
+            const tags = this.aiFeatures.generateTags(newItem);
+            if (tags.length > 0) newItem.tags = tags;
+
+            if (!this.items[category]) this.items[category] = [];
+            this.items[category].push(newItem);
+
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+
+            this.hideLoading();
+            this.showNotification(`✓ Added to ${this.categoryMetadata[category]?.name || category}`, 'success');
+
+        } catch (error) {
+            this.hideLoading();
+            this.showNotification(`Error: ${error.message}`, 'error');
+            console.error('Clipboard add error:', error);
+        }
+    }
+
+    dismissClipboardSuggestion() {
+        const banner = document.getElementById('clipboard-suggestion');
+        if (banner) {
+            banner.classList.add('dismissing');
+            setTimeout(() => banner.remove(), 300);
         }
     }
 
@@ -357,10 +588,18 @@ class AnygoodApp {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
-            // Cmd/Ctrl + N: New item
-            if (cmdOrCtrl && e.key === 'n' && this.currentCategory) {
+            // Cmd/Ctrl + N: Context-aware
+            // - From main view: Create new category
+            // - From list view: Add new item
+            if (cmdOrCtrl && e.key === 'n') {
                 e.preventDefault();
-                this.showAddItemModal();
+                if (this.currentCategory) {
+                    // In list view - add new item
+                    this.showAddItemModal();
+                } else {
+                    // In main view - create new category
+                    this.showAddCategoryModal();
+                }
             }
 
             // Cmd/Ctrl + Z: Undo
@@ -375,7 +614,8 @@ class AnygoodApp {
                 this.redo();
             }
 
-            // Cmd/Ctrl + A: Select all (in bulk mode)
+            // Cmd/Ctrl + A: Select all (in bulk mode only)
+            // Note: Global Cmd+A to open app is handled by Electron
             if (cmdOrCtrl && e.key === 'a' && this.bulkMode) {
                 e.preventDefault();
                 this.selectAllItems();
