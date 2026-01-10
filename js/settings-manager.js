@@ -85,13 +85,19 @@ class SettingsManager {
         `;
 
         modalBody.innerHTML = html;
-        modal.classList.add('show');
+        modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
     }
 
     closeSettingsModal() {
         const modal = document.getElementById('modal');
         if (modal) {
             modal.classList.remove('show');
+            setTimeout(() => {
+                modal.style.display = 'none';
+            }, 300); // Match the CSS transition duration
         }
     }
 

@@ -636,6 +636,7 @@ class AnygoodApp {
         this.setupClipboardMonitoring();
         this.setupElectronIPC();
         this.setupCategoryClicks();
+        this.setupActiveItemClickOff();
         this.renderOverview();
         this.renderKeyboardShortcuts('overview');
         this.checkForSharedData();
@@ -681,6 +682,34 @@ class AnygoodApp {
             
             this.categoryClicksSetup = true;
         }
+    }
+
+    setupActiveItemClickOff() {
+        // Click outside active item to deactivate it
+        document.addEventListener('click', (e) => {
+            // Only handle if there's an active item
+            if (!this.activeItemId) return;
+
+            // Don't deactivate if clicking on the active item itself or its interactive elements
+            const activeItem = e.target.closest('.item.active');
+            if (activeItem) return;
+
+            // Don't deactivate if clicking on modal
+            const modal = e.target.closest('.modal');
+            if (modal && modal.classList.contains('show')) return;
+
+            // Don't deactivate if clicking on any item checkbox or other interactive elements
+            if (e.target.closest('.item-checkbox') ||
+                e.target.closest('.item-link') ||
+                e.target.closest('a') ||
+                e.target.closest('button') ||
+                e.target.closest('.item-checkbox-bulk')) {
+                return;
+            }
+
+            // Deactivate the active item
+            this.setActiveItem(null);
+        });
     }
 
     setupElectronIPC() {
@@ -1932,15 +1961,17 @@ class AnygoodApp {
 
         // Set body content (without the h2 title since it's in header now)
         modalBody.innerHTML = `
-            <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
-                Try natural language: "Read 'The Creative Act' by Rick Rubin"
-            </p>
-            <input type="text" id="item-input" placeholder="Title or natural language..." autofocus>
-            <textarea id="item-description" placeholder="Description (optional)" rows="2"></textarea>
-            <input type="url" id="item-link" placeholder="Link (optional - metadata will be auto-extracted)">
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
-                <button onclick="app.addItem()">Add</button>
+            <div style="padding: 20px 24px;">
+                <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
+                    Try natural language: "Read 'The Creative Act' by Rick Rubin"
+                </p>
+                <input type="text" id="item-input" placeholder="Title or natural language..." autofocus>
+                <textarea id="item-description" placeholder="Description (optional)" rows="2"></textarea>
+                <input type="url" id="item-link" placeholder="Link (optional - metadata will be auto-extracted)">
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                    <button onclick="app.addItem()">Add</button>
+                </div>
             </div>
         `;
 
@@ -2428,7 +2459,32 @@ class AnygoodApp {
         if (!item) return;
 
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
+
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
+            <h2>Move Item</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
 
         // Get all categories except current
         const otherCategories = this.categories.filter(cat => cat !== this.currentCategory);
@@ -2443,12 +2499,13 @@ class AnygoodApp {
         }).join('');
 
         modalBody.innerHTML = `
-            <h2>Move Item</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
-            <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 12px;">Select destination category:</p>
-            ${categoriesHTML || '<p style="color: var(--text-secondary);">No other categories available</p>'}
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+            <div style="padding: 20px 24px;">
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
+                <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 12px;">Select destination category:</p>
+                ${categoriesHTML || '<p style="color: var(--text-secondary);">No other categories available</p>'}
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                </div>
             </div>
         `;
 
@@ -2508,9 +2565,34 @@ class AnygoodApp {
 
     showAddToCollectionModal(itemIndex) {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
         const item = this.items[this.currentCategory][itemIndex];
         const collections = this.collections[this.currentCategory] || [];
+
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
+            <h2>Add to Collection</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
 
         let collectionsHTML = '';
         if (collections.length === 0) {
@@ -2525,11 +2607,12 @@ class AnygoodApp {
         }
 
         modalBody.innerHTML = `
-            <h2>Add to Collection</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
-            ${collectionsHTML}
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+            <div style="padding: 20px 24px;">
+                <p style="color: var(--text-secondary); margin-bottom: 16px;">${this.escapeHtml(item.text)}</p>
+                ${collectionsHTML}
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                </div>
             </div>
         `;
         modal.style.display = 'block';
@@ -2553,7 +2636,33 @@ class AnygoodApp {
     // Collections
     showImportModal() {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
+
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
+            <h2>Import Collection</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
         const sources = this.suggestedSources[this.currentCategory] || [];
         const sourcesHTML = sources.length > 0 ? `
             <div style="margin-bottom: 16px;">
@@ -2569,16 +2678,17 @@ class AnygoodApp {
         ` : '';
 
         modalBody.innerHTML = `
-            <h2>Import Collection</h2>
-            ${sourcesHTML}
-            <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px;">
-                Or paste a URL, share link, or list of items (one per line)
-            </p>
-            <input type="text" id="import-name-input" placeholder="Collection name..." style="margin-bottom: 12px;">
-            <textarea id="import-text-input" placeholder="Paste URL, share link, or list here..." rows="6" autofocus></textarea>
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
-                <button onclick="app.processImport()">Import</button>
+            <div style="padding: 20px 24px;">
+                ${sourcesHTML}
+                <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 16px;">
+                    Or paste a URL, share link, or list of items (one per line)
+                </p>
+                <input type="text" id="import-name-input" placeholder="Collection name..." style="margin-bottom: 12px;">
+                <textarea id="import-text-input" placeholder="Paste URL, share link, or list here..." rows="6" autofocus></textarea>
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                    <button onclick="app.processImport()">Import</button>
+                </div>
             </div>
         `;
         modal.style.display = 'block';
@@ -2740,13 +2850,40 @@ class AnygoodApp {
 
     showAddCollectionModal() {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
-        modalBody.innerHTML = `
+
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
             <h2>New Collection</h2>
-            <input type="text" id="collection-name-input" placeholder="Collection name..." autofocus>
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
-                <button onclick="app.addCollection()">Create</button>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
+        modalBody.innerHTML = `
+            <div style="padding: 20px 24px;">
+                <input type="text" id="collection-name-input" placeholder="Collection name..." autofocus>
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                    <button onclick="app.addCollection()">Create</button>
+                </div>
             </div>
         `;
         modal.style.display = 'block';
@@ -2878,16 +3015,43 @@ class AnygoodApp {
     // Export & Share
     showExportModal() {
         const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
-        modalBody.innerHTML = `
+
+        // Ensure modal-body has the class (in case it was missing)
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header within this modal-content to ensure clean state
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Set header content
+        modalHeader.innerHTML = `
             <h2>Export & Share</h2>
-            <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px;">Share your ${this.currentCategory} list with others</p>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
-                <button onclick="app.exportAsJSON()" style="justify-content: center;">📥 Download as JSON</button>
-                <button onclick="app.generateShareLink()" style="justify-content: center;">🔗 Generate Share Link</button>
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
+        modalBody.innerHTML = `
+            <div style="padding: 20px 24px;">
+                <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px;">Share your ${this.currentCategory} list with others</p>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button onclick="app.exportAsJSON()" style="justify-content: center;">📥 Download as JSON</button>
+                    <button onclick="app.generateShareLink()" style="justify-content: center;">🔗 Generate Share Link</button>
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                </div>
+                <div id="share-output" style="margin-top: 16px;"></div>
             </div>
-            <div id="share-output" style="margin-top: 16px;"></div>
         `;
         modal.style.display = 'block';
         requestAnimationFrame(() => {
@@ -3049,10 +3213,12 @@ class AnygoodApp {
 
         // Set body content (without the h2 title since it's in header now)
         modalBody.innerHTML = `
-            <input type="text" id="category-name-input" placeholder="Category name..." autofocus>
-            <div class="modal-buttons">
-                <button class="secondary" onclick="app.closeModal()">Cancel</button>
-                <button onclick="app.addCategory()">Create</button>
+            <div style="padding: 20px 24px;">
+                <input type="text" id="category-name-input" placeholder="Category name..." autofocus>
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                    <button onclick="app.addCategory()">Create</button>
+                </div>
             </div>
         `;
 
