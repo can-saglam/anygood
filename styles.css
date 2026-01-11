@@ -948,89 +948,155 @@ body {
 
 /* Active state styles */
 .item.active {
-    background: var(--bg-card);
-    border: 1px solid var(--accent-blue);
-    border-radius: var(--radius-md);
-    padding: 14px;
-    margin: 4px 0;
-    box-shadow: 0 2px 8px rgba(255, 57, 0, 0.15);
+    background: var(--bg-tertiary);
+    border: none;
+    border-left: 2px solid var(--accent-blue);
+    border-radius: 0;
+    padding: 12px 14px;
+    margin: 0;
+    box-shadow: none;
     cursor: default;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .item.active:hover {
-    border-left: 1px solid var(--accent-blue);
+    background: var(--bg-tertiary);
+    border-left: 2px solid var(--accent-blue);
+}
+
+.item.active .item-checkbox {
+    margin-right: 4px;
+    align-self: center;
+}
+
+.item.active .item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.item.active .item-actions.active-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+    align-self: center;
 }
 
 .item-text-input,
 .item-description-input,
 .item-link-input {
     width: 100%;
-    border: 0.5px solid var(--border-light);
-    border-radius: var(--radius-sm);
-    padding: 8px 10px;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     font-size: 15px;
     font-family: inherit;
-    background: var(--bg-tertiary);
+    background: transparent;
     color: var(--text-primary);
-    transition: all 0.15s;
-    margin-bottom: 8px;
+    transition: none;
+    margin-bottom: 3px;
 }
 
 .item-text-input {
     font-weight: 400;
     letter-spacing: -0.2px;
+    line-height: 1.4;
 }
 
 .item-description-input {
     font-size: 13px;
     line-height: 1.38462;
     letter-spacing: -0.08px;
-    min-height: 60px;
-    resize: vertical;
+    min-height: 24px;
+    height: auto;
+    resize: none;
+    overflow: hidden;
+    color: var(--text-secondary);
+    margin-top: 3px;
+    margin-bottom: 3px;
+    display: block;
 }
 
 .item-link-input {
     font-size: 12px;
+    color: var(--accent-blue);
+    margin-top: 2px;
 }
 
 .item-text-input:focus,
 .item-description-input:focus,
 .item-link-input:focus {
     outline: none;
-    border-color: var(--accent-blue);
-    background: var(--bg-card);
-    box-shadow: 0 0 0 3px rgba(255, 57, 0, 0.15);
+    border: none;
+    background: rgba(255, 57, 0, 0.04);
+    border-radius: var(--radius-xs);
+    padding: 0;
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 3px;
+    box-shadow: none;
+    transition: none;
+}
+
+.item-link-input:focus {
+    background: rgba(255, 57, 0, 0.03);
 }
 
 .item.active .item-actions.active-actions .move-btn {
-    background: var(--accent-blue);
-    color: white;
+    background: transparent;
+    color: var(--text-secondary);
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 500;
+    border-radius: var(--radius-xs);
+    padding: 4px 6px;
+    font-size: 16px;
+    font-weight: 400;
     cursor: pointer;
     transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .item.active .item-actions.active-actions .move-btn:hover {
-    background: var(--accent-blue-hover);
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
 }
 
 .item.active .item-actions.active-actions .cancel-btn {
-    background: var(--bg-tertiary);
+    background: transparent;
     color: var(--text-secondary);
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 6px 10px;
-    font-size: 16px;
+    border-radius: var(--radius-xs);
+    padding: 4px 6px;
+    font-size: 18px;
     cursor: pointer;
     transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .item.active .item-actions.active-actions .cancel-btn:hover {
-    background: var(--border-lighter);
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary);
+}
+
+.item.active .item-actions.active-actions button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 6px;
+    border-radius: var(--radius-xs);
+    transition: all 0.15s;
+    color: var(--text-secondary);
+}
+
+.item.active .item-actions.active-actions button:hover {
+    background: rgba(0, 0, 0, 0.05);
     color: var(--text-primary);
 }
 
@@ -2170,6 +2236,29 @@ body {
 
 .dark-mode .item:hover {
     background: #1B1912;
+}
+
+.dark-mode .item.active {
+    background: #201E17;
+    border-left-color: #FF3900;
+}
+
+.dark-mode .item.active:hover {
+    background: #201E17;
+}
+
+.dark-mode .item-text-input:focus,
+.dark-mode .item-description-input:focus,
+.dark-mode .item-link-input:focus {
+    background: rgba(255, 57, 0, 0.08);
+}
+
+.dark-mode .item-link-input:focus {
+    background: rgba(255, 57, 0, 0.06);
+}
+
+.dark-mode .item.active .item-actions.active-actions button:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .dark-mode .collection {

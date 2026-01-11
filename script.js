@@ -1794,12 +1794,14 @@ class AnygoodApp {
                                        data-item-id="${item.id}"
                                        data-field="text"
                                        onblur="app.updateItemField('${item.id}', 'text', this.value)"
-                                       onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape') app.setActiveItem(null);">
+                                       onkeydown="if(event.key==='Enter') this.blur(); if(event.key==='Escape') app.setActiveItem(null);"
+                                       placeholder="Title">
                                 <textarea class="item-description-input" 
                                           data-item-id="${item.id}"
                                           data-field="description"
                                           onblur="app.updateItemField('${item.id}', 'description', this.value)"
-                                          onkeydown="if(event.key==='Escape') app.setActiveItem(null);">${item.description ? this.escapeHtml(item.description) : ''}</textarea>
+                                          onkeydown="if(event.key==='Escape') app.setActiveItem(null);"
+                                          placeholder="Description (optional)">${item.description ? this.escapeHtml(item.description) : ''}</textarea>
                                 <input type="url" 
                                        class="item-link-input" 
                                        value="${item.link ? this.escapeHtml(item.link) : ''}"
@@ -1813,14 +1815,33 @@ class AnygoodApp {
                                 <button onclick="app.showMoveItemModal(${actualIndex})" 
                                         title="Move to category"
                                         aria-label="Move to category"
-                                        class="move-btn">Move</button>
+                                        class="move-btn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                </button>
                                 <button onclick="app.deleteItem(${actualIndex})" 
                                         title="Delete"
-                                        aria-label="Delete item">🗑️</button>
+                                        aria-label="Delete item"
+                                        class="delete-btn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"/>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                        <line x1="10" y1="11" x2="10" y2="17"/>
+                                        <line x1="14" y1="11" x2="14" y2="17"/>
+                                    </svg>
+                                </button>
                                 <button onclick="app.setActiveItem(null)" 
                                         title="Cancel"
                                         aria-label="Cancel editing"
-                                        class="cancel-btn">×</button>
+                                        class="cancel-btn">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"/>
+                                        <line x1="6" y1="6" x2="18" y2="18"/>
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                     `;
@@ -2608,8 +2629,30 @@ class AnygoodApp {
             setTimeout(() => {
                 const input = document.querySelector(`.item-text-input[data-item-id="${this.activeItemId}"]`);
                 if (input) input.focus();
-            }, 50);
+                
+                // Setup auto-resize for description textarea
+                const textarea = document.querySelector(`.item-description-input[data-item-id="${this.activeItemId}"]`);
+                if (textarea) {
+                    // Initial resize - run synchronously without delay
+                    this.autoResizeTextarea(textarea);
+                    
+                    // Listen for input changes (avoid duplicate listeners)
+                    if (textarea.dataset.resizeListenerAttached !== 'true') {
+                        textarea.dataset.resizeListenerAttached = 'true';
+                        textarea.addEventListener('input', () => this.autoResizeTextarea(textarea));
+                    }
+                }
+            }, 0);
         }
+    }
+
+    autoResizeTextarea(textarea) {
+        // Reset height to get accurate scrollHeight
+        textarea.style.height = 'auto';
+        // Get the scroll height (this includes all content + padding)
+        const scrollHeight = textarea.scrollHeight;
+        // Set the height
+        textarea.style.height = scrollHeight + 'px';
     }
 
     updateItemField(itemId, field, value) {
