@@ -37,6 +37,10 @@ class AnygoodApp {
         this.completedItemsExpanded = {}; // Track which categories have completed items expanded
         this.activeItemId = null; // Track which item is in active/editing state
 
+        // Command key tap detection for keyboard hints overlay
+        this.cmdKeyPressed = false;
+        this.cmdKeyUsedWithOtherKey = false;
+
         // Initialize categories
         this.categories.forEach(cat => {
             if (!this.items[cat]) this.items[cat] = [];
@@ -1366,9 +1370,35 @@ class AnygoodApp {
     }
 
     setupKeyboardShortcuts() {
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        
         document.addEventListener('keydown', (e) => {
-            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+            // Track if Command/Ctrl key is pressed alone (for keyboard hints overlay)
+            if ((isMac && e.key === 'Meta') || (!isMac && e.key === 'Control')) {
+                // Only in category view
+                if (this.currentCategory && !this.cmdKeyPressed) {
+                    this.cmdKeyPressed = true;
+                    this.cmdKeyUsedWithOtherKey = false;
+                    
+                    // Show overlay after a short delay (to distinguish from shortcuts)
+                    setTimeout(() => {
+                        if (this.cmdKeyPressed && !this.cmdKeyUsedWithOtherKey && this.currentCategory) {
+                            this.showKeyboardHintsOverlay();
+                        }
+                    }, 200);
+                }
+            }
+
+            // If Command/Ctrl is being used with another key, mark it
+            if (cmdOrCtrl && e.key !== 'Meta' && e.key !== 'Control') {
+                this.cmdKeyUsedWithOtherKey = true;
+                // Hide overlay if it was shown
+                if (this.cmdKeyPressed) {
+                    this.hideKeyboardHintsOverlay();
+                }
+            }
 
             // Don't handle shortcuts when typing in input fields (except ESC)
             const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
@@ -1414,6 +1444,15 @@ class AnygoodApp {
                 }
             }
 
+            // Cmd/Ctrl + / (forward slash): Toggle keyboard hints overlay
+            // Only when in a category view (detail screen)
+            if (cmdOrCtrl && (e.key === '/' || e.code === 'Slash')) {
+                e.preventDefault();
+                if (this.currentCategory) {
+                    this.toggleKeyboardHintsOverlay();
+                }
+            }
+
             // Cmd/Ctrl + Z: Undo
             if (cmdOrCtrl && e.key === 'z' && !e.shiftKey) {
                 e.preventDefault();
@@ -1447,6 +1486,17 @@ class AnygoodApp {
                 if (!modalOpen && !this.activeItemId) {
                     e.preventDefault();
                     this.closeCategory();
+                }
+            }
+        });
+
+        // Detect Command/Ctrl key release - hide hints overlay
+        document.addEventListener('keyup', (e) => {
+            if ((isMac && e.key === 'Meta') || (!isMac && e.key === 'Control')) {
+                if (this.cmdKeyPressed) {
+                    this.hideKeyboardHintsOverlay();
+                    this.cmdKeyPressed = false;
+                    this.cmdKeyUsedWithOtherKey = false;
                 }
             }
         });
@@ -1600,6 +1650,7 @@ class AnygoodApp {
         this.bulkMode = false;
         this.activeItemId = null; // Clear active state when closing category
         this.closeCategoryMenu(); // Close kebab menu when closing category
+        this.hideKeyboardHintsOverlay(); // Close keyboard hints overlay when closing category
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
@@ -1641,6 +1692,74 @@ class AnygoodApp {
         
         if (dropdown && !dropdown.contains(event.target) && !menuBtn.contains(event.target)) {
             this.closeCategoryMenu();
+        }
+    }
+
+    // Keyboard Hints Overlay
+    toggleKeyboardHintsOverlay() {
+        const overlay = document.getElementById('keyboard-hints-overlay');
+        if (!overlay) return;
+
+        const isVisible = overlay.classList.contains('show');
+        
+        if (isVisible) {
+            this.hideKeyboardHintsOverlay();
+        } else {
+            this.showKeyboardHintsOverlay();
+        }
+    }
+
+    showKeyboardHintsOverlay() {
+        const overlay = document.getElementById('keyboard-hints-overlay');
+        if (!overlay) return;
+
+        // Show the overlay
+        overlay.style.display = 'block';
+        
+        // Trigger animation after a tiny delay to ensure display: block is applied
+        setTimeout(() => {
+            overlay.classList.add('show');
+        }, 10);
+
+        // Add click outside listener
+        setTimeout(() => {
+            document.addEventListener('click', this.handleClickOutsideHintsOverlay);
+        }, 0);
+
+        // Add ESC key listener
+        document.addEventListener('keydown', this.handleEscapeHintsOverlay);
+    }
+
+    hideKeyboardHintsOverlay() {
+        const overlay = document.getElementById('keyboard-hints-overlay');
+        if (!overlay) return;
+
+        overlay.classList.remove('show');
+        
+        // Hide after animation completes
+        setTimeout(() => {
+            if (!overlay.classList.contains('show')) {
+                overlay.style.display = 'none';
+            }
+        }, 250);
+
+        // Remove event listeners
+        document.removeEventListener('click', this.handleClickOutsideHintsOverlay);
+        document.removeEventListener('keydown', this.handleEscapeHintsOverlay);
+    }
+
+    handleClickOutsideHintsOverlay = (event) => {
+        const overlay = document.getElementById('keyboard-hints-overlay');
+        const panel = overlay?.querySelector('.keyboard-hints-panel');
+        
+        if (panel && !panel.contains(event.target)) {
+            this.hideKeyboardHintsOverlay();
+        }
+    }
+
+    handleEscapeHintsOverlay = (event) => {
+        if (event.key === 'Escape') {
+            this.hideKeyboardHintsOverlay();
         }
     }
 
@@ -1746,6 +1865,9 @@ class AnygoodApp {
 
         // Ensure menu is closed when rendering
         this.closeCategoryMenu();
+
+        // Ensure keyboard hints overlay is closed when switching categories
+        this.hideKeyboardHintsOverlay();
 
         this.renderDetailItems();
         this.renderDetailCollections();
