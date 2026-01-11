@@ -253,7 +253,7 @@ class SettingsManager {
             <div class="settings-section">
                 <h3 class="settings-section-title">Support</h3>
                 <p class="settings-description">
-                    <a href="https://github.com/anygood/anygood" target="_blank" style="color: var(--accent-blue);">
+                    <a href="#" onclick="event.preventDefault(); app.openExternalLink('https://github.com/anygood/anygood');" style="color: var(--accent-blue); cursor: pointer;">
                         View on GitHub
                     </a>
                 </p>

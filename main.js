@@ -211,7 +211,9 @@ const mb = menubar({
       // Enable clipboard access
       clipboard: true,
       // Enable IPC for communication
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Disable cache for CSS updates
+      cache: false
     },
     // Make it look more native
     transparent: false,
@@ -251,6 +253,16 @@ mb.on('ready', () => {
         if (error) {
           console.log('Audio haptic feedback error:', error.message);
         }
+      });
+    }
+  });
+
+  // Handle opening external URLs in default browser
+  ipcMain.on('open-external-url', (event, url) => {
+    const { shell } = require('electron');
+    if (url && typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))) {
+      shell.openExternal(url).catch(err => {
+        console.error('Failed to open external URL:', err);
       });
     }
   });

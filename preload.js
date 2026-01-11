@@ -14,5 +14,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   fetchURLMetadata: async (url) => {
     return await ipcRenderer.invoke('fetch-url-metadata', url);
+  },
+  openExternal: (url) => {
+    ipcRenderer.send('open-external-url', url);
   }
 });

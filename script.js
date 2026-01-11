@@ -150,6 +150,12 @@ class AnygoodApp {
         return itemsEmpty && collectionsEmpty;
     }
 
+    isCoreCategory(category) {
+        // Core categories are the default 5 categories
+        const coreCategories = ['read', 'listen', 'watch', 'eat', 'do'];
+        return coreCategories.includes(category);
+    }
+
     populatePlaceholderData() {
         // READ items
         this.items.read = [
@@ -690,9 +696,10 @@ class AnygoodApp {
             // Only handle if there's an active item
             if (!this.activeItemId) return;
 
-            // Don't deactivate if clicking on the active item itself or its interactive elements
-            const activeItem = e.target.closest('.item.active');
-            if (activeItem) return;
+            // Don't deactivate if clicking on ANY item (not just active one)
+            // This prevents the same click that activates an item from deactivating it
+            const anyItem = e.target.closest('.item');
+            if (anyItem) return;
 
             // Don't deactivate if clicking on modal
             const modal = e.target.closest('.modal');
@@ -1236,7 +1243,7 @@ class AnygoodApp {
                 const domain = new URL(parsed.link).hostname;
                 const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
                 linkHtml = `
-                    <a href="${this.escapeHtml(parsed.link)}" target="_blank" class="clipboard-suggestion-link" onclick="event.stopPropagation()">
+                    <a href="#" class="clipboard-suggestion-link" onclick="event.stopPropagation(); event.preventDefault(); app.openExternalLink('${this.escapeHtml(parsed.link)}');">
                         <img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">
                         <span>${this.escapeHtml(domain)}</span>
                     </a>
@@ -1363,6 +1370,36 @@ class AnygoodApp {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
 
+            // Don't handle shortcuts when typing in input fields (except ESC)
+            const isTyping = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA';
+            if (isTyping && e.key !== 'Escape') {
+                return;
+            }
+
+            // Cmd/Ctrl + 1-5: Toggle between categories (works from anywhere)
+            if (cmdOrCtrl) {
+                const categoryMap = {
+                    '1': 'read',
+                    '2': 'listen',
+                    '3': 'watch',
+                    '4': 'eat',
+                    '5': 'do'
+                };
+                
+                if (categoryMap[e.key]) {
+                    e.preventDefault();
+                    const targetCategory = categoryMap[e.key];
+                    
+                    // If already in this category, go back to overview
+                    if (this.currentCategory === targetCategory) {
+                        this.closeCategory();
+                    } else {
+                        // Switch to the target category
+                        this.openCategory(targetCategory);
+                    }
+                }
+            }
+
             // Cmd/Ctrl + N: Context-aware
             // - From main view: Create new category
             // - From list view: Add new item
@@ -1400,6 +1437,17 @@ class AnygoodApp {
             if ((e.key === 'Delete' || e.key === 'Backspace') && this.bulkMode && this.selectedItems.size > 0) {
                 e.preventDefault();
                 this.deleteSelectedItems();
+            }
+
+            // ESC: Go back to overview if in a category (and no modal is open)
+            if (e.key === 'Escape' && this.currentCategory) {
+                const modal = document.getElementById('modal');
+                const modalOpen = modal && (modal.classList.contains('show') || modal.style.display === 'block');
+                
+                if (!modalOpen && !this.activeItemId) {
+                    e.preventDefault();
+                    this.closeCategory();
+                }
             }
         });
     }
@@ -1647,6 +1695,17 @@ class AnygoodApp {
         const titleEl = document.getElementById('detail-title');
         if (titleEl) titleEl.textContent = metadata.name;
 
+        // Show/hide share button based on category type
+        const shareBtn = document.getElementById('export-share-btn');
+        if (shareBtn) {
+            // Only show share button for custom categories (not core categories)
+            if (this.isCoreCategory(this.currentCategory)) {
+                shareBtn.style.display = 'none';
+            } else {
+                shareBtn.style.display = 'inline-flex';
+            }
+        }
+
         this.renderDetailItems();
         this.renderDetailCollections();
     }
@@ -1745,7 +1804,7 @@ class AnygoodApp {
                                 <div class="item-text">${this.escapeHtml(item.text)}</div>
                                 ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
                                 ${item.tags ? `<div class="item-tags">${item.tags.map(tag => `<span class="tag">${this.escapeHtml(tag)}</span>`).join('')}</div>` : ''}
-                                ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
+                                ${item.link ? `<a href="#" class="item-link" onclick="event.stopPropagation(); event.preventDefault(); app.openExternalLink('${this.escapeHtml(item.link)}');">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
                                     </svg>
@@ -1780,7 +1839,7 @@ class AnygoodApp {
                         <div class="item-content">
                             <div class="item-text">${this.escapeHtml(item.text)}</div>
                             ${item.description ? `<div class="item-description">${this.escapeHtml(item.description)}</div>` : ''}
-                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="item-link" onclick="event.stopPropagation()">
+                            ${item.link ? `<a href="#" class="item-link" onclick="event.stopPropagation(); event.preventDefault(); app.openExternalLink('${this.escapeHtml(item.link)}');">
                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
                                 </svg>
@@ -1800,6 +1859,109 @@ class AnygoodApp {
     }
 
     // Search functionality removed from detail view
+
+    // Anygood Digest - Shuffle and merge recommendation collections
+    shuffleDailyPicks(items, category) {
+        // Check if today's shuffle exists for this category
+        const today = new Date().toDateString();
+        const shuffleKey = `dailyPicksShuffle_${category}`;
+        const dateKey = `dailyPicksDate_${category}`;
+        const lastShuffleDate = localStorage.getItem(dateKey);
+        
+        if (lastShuffleDate === today) {
+            // Retrieve cached shuffle order
+            const shuffledOrderJson = localStorage.getItem(shuffleKey);
+            if (shuffledOrderJson) {
+                try {
+                    const shuffledOrder = JSON.parse(shuffledOrderJson);
+                    // Reorder items by cached IDs
+                    const itemsById = new Map(items.map(item => [item.id || item.text, item]));
+                    const reordered = [];
+                    for (const id of shuffledOrder) {
+                        if (itemsById.has(id)) {
+                            reordered.push(itemsById.get(id));
+                            itemsById.delete(id);
+                        }
+                    }
+                    // Add any new items not in cached order
+                    reordered.push(...Array.from(itemsById.values()));
+                    return reordered;
+                } catch (e) {
+                    console.error('Error parsing shuffle order:', e);
+                }
+            }
+        }
+        
+        // Perform new shuffle (Fisher-Yates algorithm)
+        const shuffled = [...items];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        
+        // Cache for today
+        localStorage.setItem(dateKey, today);
+        localStorage.setItem(shuffleKey, JSON.stringify(shuffled.map(item => item.id || item.text)));
+        
+        return shuffled;
+    }
+
+    createDailyPicks(category) {
+        const collections = this.collections[category] || [];
+        
+        // Gather all items from digest and curated collections
+        const allItems = [];
+        const sourceMap = new Map(); // Track which collection each item came from
+        
+        collections.forEach(collection => {
+            const isDailyPicksSource = collection.digest || collection.curated;
+            if (isDailyPicksSource && collection.items && collection.items.length > 0) {
+                collection.items.forEach(item => {
+                    // Add source information to each item
+                    const itemWithSource = {
+                        ...item,
+                        _sourceCollection: collection.name,
+                        _sourceCurated: collection.curated || false,
+                        _sourceDigest: collection.digest || false
+                    };
+                    allItems.push(itemWithSource);
+                    sourceMap.set(item.id || item.text, collection);
+                });
+            }
+        });
+        
+        if (allItems.length === 0) {
+            return null;
+        }
+        
+        // Shuffle items using daily shuffle
+        const shuffledItems = this.shuffleDailyPicks(allItems, category);
+        
+        // Limit to 15 items to keep it manageable
+        const limitedItems = shuffledItems.slice(0, 15);
+        
+        return {
+            id: 'daily-picks',
+            name: 'Anygood Digest 🎲',
+            items: limitedItems,
+            expanded: true,
+            digest: true, // Use digest styling (horizontal scroll)
+            isDailyPicks: true, // Special flag
+            lastUpdated: Date.now()
+        };
+    }
+
+    refreshDailyPicks() {
+        // Clear cached shuffle for current category
+        const shuffleKey = `dailyPicksShuffle_${this.currentCategory}`;
+        const dateKey = `dailyPicksDate_${this.currentCategory}`;
+        localStorage.removeItem(shuffleKey);
+        localStorage.removeItem(dateKey);
+        
+        // Re-render to show new shuffle
+        this.renderDetail();
+        this.showNotification('Anygood Digest reshuffled!', 'success');
+    }
 
     renderDetailCollections() {
         const collectionsElement = document.getElementById('detail-collections');
@@ -1823,33 +1985,38 @@ class AnygoodApp {
             collectionsSection.style.display = 'block';
         }
 
-        // Filter out digest collections for user-created categories
-        const filteredCollections = isDefaultCategory 
-            ? collections 
-            : collections.filter(c => !c.digest);
+        // For default categories, create Anygood Digest instead of showing all collections
+        let collectionsToRender = [];
+        
+        if (isDefaultCategory) {
+            // Create unified Anygood Digest collection
+            const dailyPicks = this.createDailyPicks(this.currentCategory);
+            if (dailyPicks) {
+                collectionsToRender = [dailyPicks];
+            }
+            
+            // Add user-created (non-digest, non-curated) collections
+            const userCollections = collections.filter(c => !c.digest && !c.curated);
+            collectionsToRender.push(...userCollections);
+        } else {
+            // For custom categories, show all non-digest collections
+            collectionsToRender = collections.filter(c => !c.digest);
+        }
 
-        if (filteredCollections.length === 0) {
-            collectionsElement.innerHTML = '<div class="empty-state">No collections yet</div>';
+        if (collectionsToRender.length === 0) {
+            collectionsElement.innerHTML = '<div class="empty-state">No recommendations yet</div>';
             return;
         }
 
-        // Separate digest collections from regular collections
-        const digestCollections = filteredCollections.filter(c => c.digest);
-        const regularCollections = filteredCollections.filter(c => !c.digest);
-
-        // Sort digest collections by last updated (newest first)
-        digestCollections.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
-
-        // Combine: digest first, then regular
-        const sortedCollections = [...digestCollections, ...regularCollections];
+        const sortedCollections = collectionsToRender;
 
         collectionsElement.innerHTML = sortedCollections.map((collection, collectionIndex) => {
-            const actualIndex = filteredCollections.indexOf(collection);
+            const isDailyPicks = collection.isDailyPicks;
             const isDigest = collection.digest;
             const lastUpdated = collection.lastUpdated ? this.rssParser.formatRelativeTime(new Date(collection.lastUpdated).toISOString()) : null;
             
             return `
-            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'} ${isDigest ? 'digest' : ''}" data-collection-id="${collection.id}">
+            <div class="collection ${collection.expanded ? 'expanded' : ''} ${collection.curated ? 'curated' : 'imported'} ${isDigest ? 'digest' : ''} ${isDailyPicks ? 'daily-picks' : ''}" data-collection-id="${collection.id}">
                 <div class="collection-header">
                     <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
                         ${!isDigest ? `<button class="collection-toggle" onclick="app.toggleCollectionById('${collection.id}')" aria-label="Toggle collection">▸</button>` : ''}
@@ -1857,12 +2024,12 @@ class AnygoodApp {
                             ${!isDigest && collection.curated ? '<span class="badge-curated">★</span>' : ''}
                             ${this.escapeHtml(collection.name)}
                         </span>
-                        ${lastUpdated ? `<span class="collection-updated">Updated ${lastUpdated}</span>` : ''}
+                        ${!isDailyPicks && lastUpdated ? `<span class="collection-updated">Updated ${lastUpdated}</span>` : ''}
                     </div>
                     <div class="collection-actions">
-                        ${!isDigest ? `<span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>` : ''}
-                        ${isDigest ? `<button class="refresh-btn" onclick="app.refreshDigest(${actualIndex})" title="Refresh feed" aria-label="Refresh feed">↻</button>` : ''}
-                        ${!isDigest ? `<button onclick="app.deleteCollection(${actualIndex})" title="Delete" aria-label="Delete collection">🗑️</button>` : ''}
+                        ${!isDigest && !isDailyPicks ? `<span style="color: var(--text-secondary); font-size: 0.85em;">${collection.items.length}</span>` : ''}
+                        ${!isDailyPicks && isDigest ? `<button class="refresh-btn" onclick="app.refreshDigest(${collectionIndex})" title="Refresh feed" aria-label="Refresh feed">↻</button>` : ''}
+                        ${!isDigest && !isDailyPicks ? `<button onclick="app.deleteCollection(${collectionIndex})" title="Delete" aria-label="Delete collection">🗑️</button>` : ''}
                     </div>
                 </div>
                 <div class="collection-items ${isDigest ? 'digest-items-horizontal' : ''}">
@@ -1886,21 +2053,43 @@ class AnygoodApp {
                                 }
                             }
                             
+                            // For Anygood Digest, add source badge
+                            let sourceBadge = '';
+                            if (isDailyPicks) {
+                                if (item._sourceCurated) {
+                                    sourceBadge = '<span class="source-badge source-curated" title="From Anygood Picks">★</span>';
+                                } else if (item._sourceDigest) {
+                                    sourceBadge = '<span class="source-badge source-rss" title="From RSS feeds">📰</span>';
+                                }
+                            }
+                            
                             // For non-digest items, show date and source as before
                             const itemDate = !isDigest && item.pubDate ? this.rssParser.formatRelativeTime(item.pubDate) : null;
+                            
+                            // For Anygood Digest, need to find the original collection index to add items
+                            let addButtonCallback = '';
+                            if (isDailyPicks) {
+                                // We'll handle this specially in addCollectionItemToMain
+                                addButtonCallback = `app.addDailyPickItemToMain('${this.escapeHtml(item.id || item.text)}')`;
+                            } else {
+                                addButtonCallback = `app.addCollectionItemToMain(${collectionIndex}, ${itemIndex})`;
+                            }
                             
                             return `
                                 <div class="collection-item ${isDigest ? 'digest-item-card' : ''} ${hasMetadata ? 'has-metadata' : ''}" 
                                      data-collection-item-id="${item.id || itemIndex}" 
-                                     data-collection-index="${actualIndex}" 
+                                     data-collection-index="${collectionIndex}" 
                                      data-item-index="${itemIndex}">
                                     <div class="collection-item-content">
-                                        <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
+                                        <div class="collection-item-header-row">
+                                            <div class="collection-item-text">${this.escapeHtml(item.text)}</div>
+                                            ${sourceBadge}
+                                        </div>
                                         ${displayDescription ? `<div class="collection-item-description" title="${this.escapeHtml(item.description || '')}">${this.escapeHtml(displayDescription)}</div>` : ''}
                                         ${!isDigest ? `<div class="collection-item-meta">
                                             ${item.source ? `<span class="item-source">from ${this.escapeHtml(item.source)}</span>` : ''}
                                             ${itemDate ? `<span class="item-date">${itemDate}</span>` : ''}
-                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                            ${item.link ? `<a href="#" class="collection-item-link" onclick="event.stopPropagation(); event.preventDefault(); app.openExternalLink('${this.escapeHtml(item.link)}');">
                                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
                                                 </svg>
@@ -1908,16 +2097,16 @@ class AnygoodApp {
                                             </a>` : ''}
                                         </div>` : ''}
                                         ${isDigest ? `<div class="digest-item-footer">
-                                            ${item.link ? `<a href="${this.escapeHtml(item.link)}" target="_blank" class="collection-item-link" onclick="event.stopPropagation()">
+                                            ${item.link ? `<a href="#" class="collection-item-link" onclick="event.stopPropagation(); event.preventDefault(); app.openExternalLink('${this.escapeHtml(item.link)}');">
                                                 ${faviconUrl ? `<img src="${faviconUrl}" alt="" class="site-favicon" onerror="this.style.display='none'">` : ''}
                                                 ${this.escapeHtml(new URL(item.link).hostname)}
                                             </a>` : ''}
-                                            <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
+                                            <button class="add-to-main-btn" onclick="${addButtonCallback}">Add</button>
                                         </div>` : ''}
                                     </div>
                                     ${!isDigest ? `<div class="collection-item-actions">
-                                        <button class="add-to-main-btn" onclick="app.addCollectionItemToMain(${actualIndex}, ${itemIndex})">Add</button>
-                                        <button onclick="app.deleteCollectionItem(${actualIndex}, ${itemIndex})">×</button>
+                                        <button class="add-to-main-btn" onclick="${addButtonCallback}">Add</button>
+                                        ${!isDailyPicks ? `<button onclick="app.deleteCollectionItem(${collectionIndex}, ${itemIndex})">×</button>` : ''}
                                     </div>` : ''}
                                 </div>
                             `;
@@ -1961,15 +2150,13 @@ class AnygoodApp {
 
         // Set body content (without the h2 title since it's in header now)
         modalBody.innerHTML = `
-            <div style="padding: 20px 24px;">
-                <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 12px;">
-                    Try natural language: "Read 'The Creative Act' by Rick Rubin"
+            <div style="padding: 16px 24px 20px;">
+                <p style="color: var(--text-secondary); font-size: 0.85em; margin-bottom: 8px;">
+                    Type a title, natural language (e.g., "Read 'The Creative Act' by Rick Rubin"), or paste a URL
                 </p>
-                <input type="text" id="item-input" placeholder="Title or natural language..." autofocus>
+                <input type="text" id="item-input" placeholder="Enter title, natural language, or URL..." autofocus>
                 <textarea id="item-description" placeholder="Description (optional)" rows="2"></textarea>
-                <input type="url" id="item-link" placeholder="Link (optional - metadata will be auto-extracted)">
                 <div class="modal-buttons">
-                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
                     <button onclick="app.addItem()">Add</button>
                 </div>
             </div>
@@ -1981,13 +2168,13 @@ class AnygoodApp {
         });
 
         const input = document.getElementById('item-input');
-        const linkInput = document.getElementById('item-link');
         const descriptionInput = document.getElementById('item-description');
         
         let urlParseTimer;
+        let detectedLink = null; // Store detected URL/link separately
         
         // Handle paste events for immediate metadata extraction
-        const handlePaste = async (e, targetInput) => {
+        const handlePaste = async (e) => {
             // Get pasted text
             const pastedText = (e.clipboardData || window.clipboardData).getData('text');
             
@@ -2000,42 +2187,47 @@ class AnygoodApp {
             if (detectedURL && isURLResult) {
                 e.preventDefault(); // Prevent default paste
                 
-                // If pasting into link field, set it directly
-                if (targetInput === linkInput) {
-                    linkInput.value = detectedURL;
-                } else {
-                    // If pasting into title field, move URL to link field
-                    linkInput.value = detectedURL;
-                }
+                // Store the detected URL
+                detectedLink = detectedURL;
+                modal.dataset.detectedLink = detectedLink;
+                
+                // Show visual feedback (optional - can add loading state)
+                input.placeholder = "Fetching metadata...";
                 
                 // Immediately fetch metadata
                 try {
                     const metadata = await this.fetchURLMetadata(detectedURL);
                     
                     if (metadata && !metadata.error) {
-                        // Populate title if available and field is empty or only contains the URL
-                        if (metadata.title && (targetInput === linkInput || !input.value || input.value === pastedText.trim())) {
+                        // Populate title if available
+                        if (metadata.title) {
                             input.value = metadata.title;
+                        } else {
+                            // If no metadata title, just show the URL
+                            input.value = detectedURL;
                         }
                         
                         // Populate description if available and field is empty
                         if (metadata.description && !descriptionInput.value) {
                             descriptionInput.value = metadata.description;
                         }
+                    } else {
+                        // If metadata fetch fails, show the URL
+                        input.value = detectedURL;
                     }
                 } catch (error) {
                     console.error('URL metadata fetch error:', error);
-                    // If metadata fetch fails, still allow the paste
-                    if (targetInput === linkInput) {
-                        linkInput.value = detectedURL;
-                    }
+                    // If metadata fetch fails, show the URL
+                    input.value = detectedURL;
+                } finally {
+                    // Restore placeholder
+                    input.placeholder = "Enter title, natural language, or URL...";
                 }
             }
         };
         
-        // Add paste listeners
-        linkInput.addEventListener('paste', (e) => handlePaste(e, linkInput));
-        input.addEventListener('paste', (e) => handlePaste(e, input));
+        // Add paste listener
+        input.addEventListener('paste', handlePaste);
         
         // Handle input changes with debounce for URL detection (fallback for typing URLs)
         input.addEventListener('input', async (e) => {
@@ -2044,8 +2236,15 @@ class AnygoodApp {
             // Clear existing timer
             clearTimeout(urlParseTimer);
             
-            // Skip if empty or link field already has value
-            if (!text || linkInput.value) return;
+            // Update modal dataset immediately when input changes
+            modal.dataset.detectedLink = detectedLink || '';
+            
+            // Skip if empty
+            if (!text) {
+                detectedLink = null;
+                modal.dataset.detectedLink = '';
+                return;
+            }
             
             // Debounce URL parsing
             urlParseTimer = setTimeout(async () => {
@@ -2053,16 +2252,16 @@ class AnygoodApp {
                 const detectedURL = this.urlParser.detectURL(text);
                 
                 if (detectedURL && this.urlParser.isURL(text)) {
-                    // Text is a URL - fetch metadata and populate fields
+                    // Text is a URL - store it and fetch metadata
+                    detectedLink = detectedURL;
+                    modal.dataset.detectedLink = detectedLink;
+                    
                     try {
                         const metadata = await this.fetchURLMetadata(detectedURL);
                         
                         // Only proceed if we got valid metadata without errors
                         if (metadata && metadata.title && !metadata.error) {
-                            // Move URL to link field
-                            linkInput.value = detectedURL;
-                            
-                            // Replace title with fetched title
+                            // Replace URL with fetched title
                             input.value = metadata.title;
                             
                             // Populate description if available and field is empty
@@ -2074,6 +2273,10 @@ class AnygoodApp {
                         console.error('URL metadata fetch error:', error);
                         // Silently fail - user can continue typing
                     }
+                } else {
+                    // Not a URL - clear detected link
+                    detectedLink = null;
+                    modal.dataset.detectedLink = '';
                 }
             }, 500);
         });
@@ -2088,7 +2291,7 @@ class AnygoodApp {
         // Auto-detect if it's natural language
         input.addEventListener('blur', async () => {
             const text = input.value.trim();
-            if (text && text.length > 10 && !linkInput.value) {
+            if (text && text.length > 10 && !detectedLink) {
                 // Check if it's a URL first
                 const detectedURL = this.urlParser.detectURL(text);
                 if (detectedURL && this.urlParser.isURL(text)) {
@@ -2101,11 +2304,12 @@ class AnygoodApp {
                     const parsed = await this.aiFeatures.parseNaturalLanguage(text);
                     if (parsed.title && parsed.title !== text) {
                         input.value = parsed.title;
-                        if (parsed.description) {
+                        if (parsed.description && !descriptionInput.value) {
                             descriptionInput.value = parsed.description;
                         }
                         if (parsed.link) {
-                            linkInput.value = parsed.link;
+                            detectedLink = parsed.link;
+                            modal.dataset.detectedLink = detectedLink;
                         }
                     }
                 } catch (error) {
@@ -2114,16 +2318,19 @@ class AnygoodApp {
                 }
             }
         });
+        
+        // Initialize modal dataset
+        modal.dataset.detectedLink = '';
     }
 
     async addItem() {
+        const modal = document.getElementById('modal');
         const input = document.getElementById('item-input');
         const descriptionInput = document.getElementById('item-description');
-        const linkInput = document.getElementById('item-link');
 
         const text = input.value.trim();
         let description = descriptionInput?.value.trim();
-        let link = linkInput?.value.trim();
+        let link = modal.dataset.detectedLink || ''; // Get detected link from modal dataset
 
         if (!text) return;
 
@@ -2332,7 +2539,8 @@ class AnygoodApp {
             this.activeItemId = null; // Clear active state
             this.saveState();
             this.storage.save('items', this.items);
-            this.renderDetail();
+            // Only re-render items, not collections (which haven't changed)
+            this.renderDetailItems();
             this.updateCategoryCounts();
         }
     }
@@ -3012,8 +3220,83 @@ class AnygoodApp {
         }
     }
 
-    // Export & Share
-    showExportModal() {
+    addDailyPickItemToMain(itemId) {
+        // Find the item in the original collections (digest or curated)
+        const collections = this.collections[this.currentCategory] || [];
+        let foundItem = null;
+        let sourceCollection = null;
+        
+        for (const collection of collections) {
+            if (collection.digest || collection.curated) {
+                const item = collection.items.find(i => (i.id || i.text) === itemId);
+                if (item) {
+                    foundItem = item;
+                    sourceCollection = collection;
+                    break;
+                }
+            }
+        }
+        
+        if (!foundItem) return;
+        
+        // Check if item already exists in main list
+        if (!this.items[this.currentCategory].find(i => i.id === foundItem.id)) {
+            // Create item copy
+            const newItem = { ...foundItem, completed: false };
+            
+            // Remove internal tracking properties
+            delete newItem._sourceCollection;
+            delete newItem._sourceCurated;
+            delete newItem._sourceDigest;
+            
+            // If it has a description, summarize it
+            if (newItem.description) {
+                newItem.description = this.aiFeatures.summarizeDescription(newItem.description, 100);
+            }
+            
+            this.items[this.currentCategory].push(newItem);
+            this.saveState();
+            this.storage.save('items', this.items);
+            this.updateCategoryCounts();
+            
+            // Animate removal from Anygood Digest
+            const itemElement = document.querySelector(
+                `.collection-item[data-collection-item-id="${itemId}"]`
+            );
+            
+            if (itemElement) {
+                itemElement.classList.add('moving-out');
+                
+                setTimeout(() => {
+                    // Remove from source collection
+                    if (sourceCollection) {
+                        const itemIndex = sourceCollection.items.findIndex(i => (i.id || i.text) === itemId);
+                        if (itemIndex !== -1) {
+                            sourceCollection.items.splice(itemIndex, 1);
+                            this.saveState();
+                            this.storage.save('collections', this.collections);
+                        }
+                    }
+                    // Re-render to update UI
+                    this.renderDetail();
+                }, 400);
+            } else {
+                // Fallback: remove immediately
+                if (sourceCollection) {
+                    const itemIndex = sourceCollection.items.findIndex(i => (i.id || i.text) === itemId);
+                    if (itemIndex !== -1) {
+                        sourceCollection.items.splice(itemIndex, 1);
+                        this.saveState();
+                        this.storage.save('collections', this.collections);
+                    }
+                }
+                this.renderDetail();
+            }
+        }
+    }
+
+    // Share List
+    showShareModal() {
         const modal = document.getElementById('modal');
         const modalContent = document.querySelector('.modal-content');
         const modalBody = document.getElementById('modal-body');
@@ -3036,21 +3319,58 @@ class AnygoodApp {
             modalContent.insertBefore(modalHeader, modalBody);
         }
 
+        // Get category metadata for display name
+        const metadata = this.categoryMetadata[this.currentCategory] || { name: this.currentCategory };
+        const categoryName = metadata.name || this.currentCategory;
+
+        // Generate share link immediately
+        let shareData, encoded, shareUrl;
+        try {
+            shareData = {
+                version: "1.0",
+                type: "custom-category",
+                category: this.currentCategory,
+                categoryMetadata: this.categoryMetadata[this.currentCategory],
+                items: this.items[this.currentCategory] || [],
+                collections: this.collections[this.currentCategory] || [],
+                sharedAt: new Date().toISOString(),
+                itemCount: (this.items[this.currentCategory] || []).length,
+                collectionCount: (this.collections[this.currentCategory] || []).length
+            };
+            
+            // Use proper Unicode-safe encoding: first encode to URI component, then base64
+            const jsonString = JSON.stringify(shareData);
+            // Convert to base64 safely by first encoding as URI component to handle Unicode
+            encoded = btoa(encodeURIComponent(jsonString).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+                return String.fromCharCode('0x' + p1);
+            }));
+            shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
+        } catch (error) {
+            console.error('Error generating share link:', error);
+            this.showNotification('Error generating share link', 'error');
+            return;
+        }
+
         // Set header content
         modalHeader.innerHTML = `
-            <h2>Export & Share</h2>
+            <h2>Share List</h2>
             <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
         `;
 
         modalBody.innerHTML = `
             <div style="padding: 20px 24px;">
-                <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px;">Share your ${this.currentCategory} list with others</p>
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <button onclick="app.exportAsJSON()" style="justify-content: center;">📥 Download as JSON</button>
-                    <button onclick="app.generateShareLink()" style="justify-content: center;">🔗 Generate Share Link</button>
-                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                <p style="color: var(--text-secondary); font-size: 0.9em; margin-bottom: 20px;">
+                    Share your <strong>${this.escapeHtml(categoryName)}</strong> list with another Anygood user
+                </p>
+                <div style="background: var(--bg-primary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 16px;">
+                    <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 8px;">Share this link:</p>
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <input type="text" value="${shareUrl}" readonly style="flex: 1; font-size: 0.8em; padding: 8px;" id="share-url-input">
+                        <button onclick="app.copyShareLink()" style="padding: 8px 16px; font-size: 0.85em;">Copy</button>
+                    </div>
+                    <div id="copy-feedback" style="min-height: 20px;"></div>
                 </div>
-                <div id="share-output" style="margin-top: 16px;"></div>
+                <button class="secondary" onclick="app.closeModal()" style="width: 100%; justify-content: center;">Done</button>
             </div>
         `;
         modal.style.display = 'block';
@@ -3059,52 +3379,19 @@ class AnygoodApp {
         });
     }
 
-    exportAsJSON() {
-        const exportData = this.storage.exportData();
-        const dataStr = JSON.stringify(exportData, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `anygood-${this.currentCategory}-${Date.now()}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-
-        const output = document.getElementById('share-output');
-        if (output) output.innerHTML = '<p style="color: var(--accent-blue); font-size: 0.9em;">✓ Downloaded successfully!</p>';
-    }
-
-    generateShareLink() {
-        const shareData = {
-            category: this.currentCategory,
-            items: this.items[this.currentCategory],
-            collections: this.collections[this.currentCategory]
-        };
-        const encoded = btoa(JSON.stringify(shareData));
-        const shareUrl = `${window.location.origin}${window.location.pathname}#share=${encoded}`;
-        const output = document.getElementById('share-output');
-        if (output) {
-            output.innerHTML = `
-                <div style="background: var(--bg-primary); padding: 12px; border-radius: var(--radius-sm); margin-top: 12px;">
-                    <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 8px;">Share this link:</p>
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" value="${shareUrl}" readonly style="flex: 1; font-size: 0.8em; padding: 8px;" id="share-url-input">
-                        <button onclick="app.copyShareLink()" style="padding: 8px 16px; font-size: 0.85em;">Copy</button>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
     copyShareLink() {
         const input = document.getElementById('share-url-input');
         if (input) {
             input.select();
             document.execCommand('copy');
-            const output = document.getElementById('share-output');
-            if (output) output.innerHTML += '<p style="color: var(--accent-blue); font-size: 0.9em; margin-top: 8px;">✓ Link copied!</p>';
+            const feedback = document.getElementById('copy-feedback');
+            if (feedback) {
+                feedback.innerHTML = '<p style="color: var(--accent-blue); font-size: 0.85em;">✓ Link copied to clipboard!</p>';
+                // Clear feedback after 3 seconds
+                setTimeout(() => {
+                    if (feedback) feedback.innerHTML = '';
+                }, 3000);
+            }
         }
     }
 
@@ -3113,10 +3400,28 @@ class AnygoodApp {
         if (hash.startsWith('#share=')) {
             try {
                 const encoded = hash.substring(7);
-                const decoded = JSON.parse(atob(encoded));
+                // Decode with Unicode support: reverse the encoding process
+                const decodedString = decodeURIComponent(atob(encoded).split('').map((c) => {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                const decoded = JSON.parse(decodedString);
+                
+                // Validate shared data structure
                 if (decoded.category && decoded.items) {
                     setTimeout(() => {
-                        if (confirm(`Import shared ${decoded.category} list with ${decoded.items.length} items?`)) {
+                        // Build detailed confirmation message
+                        const categoryName = decoded.categoryMetadata?.name || decoded.category;
+                        const itemCount = decoded.itemCount || decoded.items.length;
+                        const collectionCount = decoded.collectionCount || (decoded.collections?.length || 0);
+                        
+                        let message = `Import "${categoryName}" list?\n\n`;
+                        message += `📝 ${itemCount} item${itemCount !== 1 ? 's' : ''}`;
+                        if (collectionCount > 0) {
+                            message += `\n📚 ${collectionCount} collection${collectionCount !== 1 ? 's' : ''}`;
+                        }
+                        message += `\n\nItems will be merged with any existing items in this category.`;
+                        
+                        if (confirm(message)) {
                             this.importSharedData(decoded);
                         }
                         window.location.hash = '';
@@ -3124,41 +3429,83 @@ class AnygoodApp {
                 }
             } catch (error) {
                 console.error('Error parsing shared data:', error);
-                this.showNotification('Invalid share link', 'error');
+                this.showNotification('Invalid or corrupted share link', 'error');
+                window.location.hash = '';
             }
         }
     }
 
     importSharedData(sharedData) {
         const category = sharedData.category;
+        const categoryMetadata = sharedData.categoryMetadata;
+        
+        // Create category if it doesn't exist
+        if (!this.categories.includes(category)) {
+            this.categories.push(category);
+            this.items[category] = [];
+            this.collections[category] = [];
+            
+            // Store category metadata if provided
+            if (categoryMetadata) {
+                this.categoryMetadata[category] = categoryMetadata;
+                this.storage.save('categoryMetadata', this.categoryMetadata);
+            }
+            
+            this.storage.save('categories', this.categories);
+        }
+        
+        // Track import stats
+        let importedItems = 0;
+        let importedCollections = 0;
+        let skippedItems = 0;
+        
+        // Import items (avoid duplicates based on text)
         const existingTexts = new Set(this.items[category].map(i => i.text));
-        let imported = 0;
-
+        
         sharedData.items.forEach(item => {
             if (!existingTexts.has(item.text)) {
                 this.items[category].push({
                     ...item,
                     id: Date.now() + Math.random(),
-                    completed: false
+                    completed: false // Reset completion status on import
                 });
-                imported++;
+                importedItems++;
+            } else {
+                skippedItems++;
             }
         });
 
+        // Import collections if present
         if (sharedData.collections && sharedData.collections.length > 0) {
             sharedData.collections.forEach(collection => {
                 this.collections[category].push({
                     ...collection,
                     id: Date.now() + Math.random(),
-                    imported: true
+                    imported: true,
+                    importedAt: new Date().toISOString()
                 });
+                importedCollections++;
             });
         }
 
+        // Save state
         this.saveState();
         this.storage.save('items', this.items);
         this.storage.save('collections', this.collections);
         this.updateCategoryCounts();
+        this.renderOverview();
+        
+        // Show success notification with details
+        let message = `Imported ${importedItems} item${importedItems !== 1 ? 's' : ''}`;
+        if (importedCollections > 0) {
+            message += ` and ${importedCollections} collection${importedCollections !== 1 ? 's' : ''}`;
+        }
+        if (skippedItems > 0) {
+            message += ` (${skippedItems} duplicate${skippedItems !== 1 ? 's' : ''} skipped)`;
+        }
+        this.showNotification(message, 'success');
+        
+        // Open the category to show imported content
         this.openCategory(category);
     }
 
@@ -3470,6 +3817,15 @@ class AnygoodApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    openExternalLink(url) {
+        // Use Electron API if available, otherwise fallback to window.open
+        if (window.electronAPI && window.electronAPI.openExternal) {
+            window.electronAPI.openExternal(url);
+        } else {
+            window.open(url, '_blank');
+        }
     }
 }
 
