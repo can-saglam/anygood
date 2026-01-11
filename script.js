@@ -1599,6 +1599,7 @@ class AnygoodApp {
         this.selectedItems.clear();
         this.bulkMode = false;
         this.activeItemId = null; // Clear active state when closing category
+        this.closeCategoryMenu(); // Close kebab menu when closing category
         document.getElementById('detail-screen').classList.remove('active');
         document.getElementById('overview-screen').classList.add('active');
         this.renderOverview();
@@ -1606,6 +1607,43 @@ class AnygoodApp {
         // Focus input when returning to main view
         setTimeout(() => this.focusQuickAddInput(), 100);
     }
+
+    // Kebab Menu Methods
+    toggleCategoryMenu(event) {
+        event.stopPropagation();
+        const dropdown = document.getElementById('category-menu-dropdown');
+        if (!dropdown) return;
+
+        const isVisible = dropdown.style.display === 'block';
+        
+        if (isVisible) {
+            this.closeCategoryMenu();
+        } else {
+            dropdown.style.display = 'block';
+            // Add click-outside listener after a small delay to avoid immediate trigger
+            setTimeout(() => {
+                document.addEventListener('click', this.handleClickOutsideMenu);
+            }, 0);
+        }
+    }
+
+    closeCategoryMenu() {
+        const dropdown = document.getElementById('category-menu-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        document.removeEventListener('click', this.handleClickOutsideMenu);
+    }
+
+    handleClickOutsideMenu = (event) => {
+        const dropdown = document.getElementById('category-menu-dropdown');
+        const menuBtn = document.getElementById('category-menu-btn');
+        
+        if (dropdown && !dropdown.contains(event.target) && !menuBtn.contains(event.target)) {
+            this.closeCategoryMenu();
+        }
+    }
+
 
     // Rendering
     renderOverview() {
@@ -1695,16 +1733,19 @@ class AnygoodApp {
         const titleEl = document.getElementById('detail-title');
         if (titleEl) titleEl.textContent = metadata.name;
 
-        // Show/hide share button based on category type
-        const shareBtn = document.getElementById('export-share-btn');
-        if (shareBtn) {
-            // Only show share button for custom categories (not core categories)
+        // Show/hide kebab menu based on category type
+        const menuBtn = document.getElementById('category-menu-btn');
+        if (menuBtn) {
+            // Only show kebab menu for custom categories (not core categories)
             if (this.isCoreCategory(this.currentCategory)) {
-                shareBtn.style.display = 'none';
+                menuBtn.style.display = 'none';
             } else {
-                shareBtn.style.display = 'inline-flex';
+                menuBtn.style.display = 'inline-flex';
             }
         }
+
+        // Ensure menu is closed when rendering
+        this.closeCategoryMenu();
 
         this.renderDetailItems();
         this.renderDetailCollections();
@@ -3579,6 +3620,98 @@ class AnygoodApp {
             if (e.key === 'Enter') this.addCategory();
         });
     }
+
+    showEditCategoryModal() {
+        if (!this.currentCategory) return;
+        
+        // Don't allow editing core categories
+        if (this.isCoreCategory(this.currentCategory)) {
+            this.showNotification('Core categories cannot be renamed', 'error');
+            return;
+        }
+
+        const modal = document.getElementById('modal');
+        const modalContent = document.querySelector('.modal-content');
+        const modalBody = document.getElementById('modal-body');
+
+        // Ensure modal-body has the class
+        if (modalBody && !modalBody.classList.contains('modal-body')) {
+            modalBody.classList.add('modal-body');
+        }
+
+        // Remove any existing header
+        const existingHeader = modalContent?.querySelector('.modal-header');
+        if (existingHeader) {
+            existingHeader.remove();
+        }
+
+        // Create fresh header
+        let modalHeader = document.createElement('div');
+        modalHeader.className = 'modal-header';
+        if (modalContent && modalBody) {
+            modalContent.insertBefore(modalHeader, modalBody);
+        }
+
+        // Get current category name
+        const currentMetadata = this.categoryMetadata[this.currentCategory] || { name: this.currentCategory };
+        const escapedName = currentMetadata.name.replace(/"/g, '&quot;');
+        
+        // Set header content
+        modalHeader.innerHTML = `
+            <h2>Edit Category Name</h2>
+            <button class="modal-close-btn" onclick="app.closeModal()" aria-label="Close">×</button>
+        `;
+
+        // Set body content with current name
+        modalBody.innerHTML = `
+            <div style="padding: 20px 24px;">
+                <input type="text" id="edit-category-name-input" placeholder="Category name..." value="${escapedName}" autofocus>
+                <div class="modal-buttons">
+                    <button class="secondary" onclick="app.closeModal()">Cancel</button>
+                    <button onclick="app.updateCategoryName()">Save</button>
+                </div>
+            </div>
+        `;
+
+        modal.style.display = 'block';
+        requestAnimationFrame(() => {
+            modal.classList.add('show');
+        });
+
+        const nameInput = document.getElementById('edit-category-name-input');
+        // Select the text for easy editing
+        nameInput.select();
+        
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.updateCategoryName();
+        });
+    }
+
+    updateCategoryName() {
+        if (!this.currentCategory) return;
+        
+        const nameInput = document.getElementById('edit-category-name-input');
+        const newName = nameInput.value.trim();
+
+        if (!newName) {
+            this.showNotification('Please enter a category name', 'error');
+            return;
+        }
+
+        // Update the metadata with new name (keep the same slug)
+        this.categoryMetadata[this.currentCategory] = {
+            ...this.categoryMetadata[this.currentCategory],
+            name: newName
+        };
+
+        // Save and update UI
+        this.storage.save('categoryMetadata', this.categoryMetadata);
+        this.closeModal();
+        this.renderDetail();
+        this.renderOverview();
+        this.showNotification('Category name updated', 'success');
+    }
+
 
     addCategory() {
         const nameInput = document.getElementById('category-name-input');
