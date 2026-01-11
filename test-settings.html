@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings Preview - anygood</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .test-container {
+            max-width: 480px;
+            width: 100%;
+        }
+        .test-btn {
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius-lg);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .test-btn:hover {
+            background: var(--accent-blue-hover);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <button class="test-btn" onclick="showSettings()">Open Settings</button>
+        
+        <!-- Modal -->
+        <div id="modal" class="modal">
+            <div class="modal-content">
+                <div id="modal-body" class="modal-body"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'general';
+        
+        function showSettings() {
+            const modal = document.getElementById('modal');
+            const modalBody = document.getElementById('modal-body');
+            
+            const html = `
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close-btn" onclick="closeSettings()">×</button>
+                </div>
+                
+                <div class="settings-tabs">
+                    <button class="settings-tab ${currentTab === 'general' ? 'active' : ''}" onclick="switchTab('general')">
+                        <span class="tab-icon">⚙️</span>
+                        <span class="tab-label">General</span>
+                    </button>
+                    <button class="settings-tab ${currentTab === 'sync' ? 'active' : ''}" onclick="switchTab('sync')">
+                        <span class="tab-icon">🔄</span>
+                        <span class="tab-label">Sync</span>
+                    </button>
+                    <button class="settings-tab ${currentTab === 'about' ? 'active' : ''}" onclick="switchTab('about')">
+                        <span class="tab-icon">ℹ️</span>
+                        <span class="tab-label">About</span>
+                    </button>
+                </div>
+
+                <div class="settings-content">
+                    ${renderTabContent()}
+                </div>
+            `;
+
+            modalBody.innerHTML = html;
+            modal.classList.add('show');
+        }
+        
+        function closeSettings() {
+            document.getElementById('modal').classList.remove('show');
+        }
+        
+        function switchTab(tab) {
+            currentTab = tab;
+            showSettings();
+        }
+        
+        function renderTabContent() {
+            switch (currentTab) {
+                case 'general':
+                    return `
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Appearance</h3>
+                            
+                            <div class="settings-option">
+                                <label for="theme-select">Theme</label>
+                                <select id="theme-select">
+                                    <option value="system" selected>System</option>
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Preferences</h3>
+                            
+                            <div class="settings-option">
+                                <label>
+                                    <input type="checkbox" checked>
+                                    Show notifications
+                                </label>
+                            </div>
+
+                            <div class="settings-option">
+                                <label>
+                                    <input type="checkbox" checked>
+                                    Haptic feedback
+                                </label>
+                            </div>
+                        </div>
+                    `;
+                case 'sync':
+                    return `
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Cloud Sync</h3>
+                            <p class="settings-description">
+                                Sign in to sync your data across devices and back up to the cloud.
+                            </p>
+                            
+                            <div class="auth-notice">
+                                <p>⚠️ Authentication is not yet available</p>
+                                <p class="settings-description-small">
+                                    Cloud sync and authentication features are coming soon. 
+                                    Your data is currently stored locally on this device.
+                                </p>
+                            </div>
+                            
+                            <button class="settings-button primary" disabled>Sign In</button>
+                        </div>
+                    `;
+                case 'about':
+                    return `
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">About</h3>
+                            <div class="about-info">
+                                <div class="app-logo">
+                                    <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 8px;">anygood</h1>
+                                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Version 1.0.0</p>
+                                </div>
+                                <p class="settings-description">
+                                    A curated todo app for East London creatives.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Data Management</h3>
+                            <button class="settings-button secondary">
+                                Export Data
+                            </button>
+                            <button class="settings-button secondary">
+                                Import Data
+                            </button>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Support</h3>
+                            <p class="settings-description">
+                                <a href="https://github.com/anygood/anygood" target="_blank" style="color: var(--accent-blue);">
+                                    View on GitHub
+                                </a>
+                            </p>
+                        </div>
+                    `;
+            }
+        }
+        
+        // Close modal when clicking outside
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeSettings();
+            }
+        });
+    </script>
+</body>
+</html>
