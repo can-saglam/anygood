@@ -950,7 +950,6 @@ body {
 .item.active {
     background: var(--bg-tertiary);
     border: none;
-    border-left: 2px solid var(--accent-blue);
     border-radius: 0;
     padding: 12px 14px;
     margin: 0;
@@ -963,7 +962,6 @@ body {
 
 .item.active:hover {
     background: var(--bg-tertiary);
-    border-left: 2px solid var(--accent-blue);
 }
 
 .item.active .item-checkbox {
@@ -2240,7 +2238,6 @@ body {
 
 .dark-mode .item.active {
     background: #201E17;
-    border-left-color: #FF3900;
 }
 
 .dark-mode .item.active:hover {
