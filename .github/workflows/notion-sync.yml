@@ -1,0 +1,37 @@
+name: Sync Notion to Supabase
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC (10 AM London time in winter, 10 AM BST in summer)
+    - cron: '0 9 * * *'
+  
+  # Allow manual triggering from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install @notionhq/client @supabase/supabase-js dotenv
+      
+      - name: Run Notion sync
+        env:
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node notion-sync.js
+      
+      - name: Notify on failure
+        if: failure()
+        run: echo "Sync failed! Check the logs above."
